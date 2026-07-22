@@ -1,0 +1,20 @@
+# 10yendama SEO Watch: Nginx location rules example
+# Add these rules inside the server block and adjust /seo-watch/ to the installation path.
+
+location ~ ^/seo-watch/(?:app|bin|config|database|tests|views)(?:/|$) {
+    deny all;
+    return 404;
+}
+
+location ~ ^/seo-watch/(?:.*/)?\. {
+    deny all;
+    return 404;
+}
+
+location ~* ^/seo-watch/.*\.(?:md|sql|log|ini|example|lock|ya?ml|sh)$ {
+    deny all;
+    return 404;
+}
+
+# Add your normal PHP-FPM handler separately.
+# Ensure the server redirects HTTP to HTTPS before enabling Google OAuth.
