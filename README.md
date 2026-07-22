@@ -4,6 +4,8 @@ Google Search Consoleの実検索データを蓄積し、**伸ばすべき記事
 
 ComposerやNode.jsを使わず、PHPとMySQLだけで動作します。Apache系共有サーバーへ直接配置でき、CLI/Cronによる定期取得にも対応しています。
 
+![screenshot](./screenshot.png)
+
 ## 主な機能
 
 - Google OAuth 2.0によるSearch Console読み取り専用連携
