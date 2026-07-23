@@ -12,9 +12,9 @@ use Tenyendama\SeoWatch\View;
         <div><dt>ロール</dt><dd><?=View::e(UserAccountPolicy::roleLabel((string)$account['role']))?></dd></div>
         <div><dt>状態</dt><dd><?=View::e(UserAccountPolicy::statusLabel((string)$account['account_status']))?></dd></div>
         <div><dt>メール</dt><dd><?=View::e(EmailAddress::mask($account['email']))?></dd></div>
-        <div><dt>メール確認</dt><dd><?=$account['email_verified_at'] ? '確認済み' : '未確認'?></dd></div>
-        <div><dt>最終ログイン</dt><dd><?=View::e($account['last_login_at'] ?? '記録なし')?></dd></div>
-        <div><dt>パスワード変更</dt><dd><?=View::e($account['password_changed_at'] ?? '記録なし')?></dd></div>
+        <div><dt>メール確認</dt><dd><?=$account['email_verified_at'] ? $dateTime->time($account['email_verified_at']) : '未確認'?></dd></div>
+        <div><dt>最終ログイン</dt><dd><?=$dateTime->time($account['last_login_at'] ?? null)?></dd></div>
+        <div><dt>パスワード変更</dt><dd><?=$dateTime->time($account['password_changed_at'] ?? null)?></dd></div>
     </dl>
     <?php if (!$account['email']): ?>
         <div class="alert warning">パスワード再設定に利用するメールアドレスが未登録です。

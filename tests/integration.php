@@ -33,6 +33,7 @@ $pdo = new PDO($dsn . ';dbname=seo_watch_test', $user, $pass, [
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES => false,
 ]);
+$pdo->exec("SET time_zone = '+00:00'");
 
 // v0.6.0相当の既存構造から移行する。
 $pdo->exec(<<<'SQL'
@@ -83,6 +84,8 @@ $assert = static function (bool $condition, string $message): void {
 $columns = $pdo->query('SHOW COLUMNS FROM admins')->fetchAll(PDO::FETCH_COLUMN);
 $assert(in_array('email', $columns, true), 'email migration');
 $assert(in_array('session_version', $columns, true), 'session version migration');
+$assert($pdo->query('SELECT @@session.time_zone')->fetchColumn() === '+00:00', 'UTC database session');
+$assert((bool)$pdo->query("SHOW TABLES LIKE 'settings'")->fetchColumn(), 'settings migration');
 $legacy = $pdo->query("SELECT * FROM admins WHERE username = 'admin'")->fetch();
 $assert($legacy && $legacy['account_status'] === 'active', 'legacy account active');
 $assert(password_verify('legacy-password-123', (string)$legacy['password_hash']), 'legacy password preserved');

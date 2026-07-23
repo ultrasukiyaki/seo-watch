@@ -66,7 +66,7 @@ use Tenyendama\SeoWatch\View;
                     <td><strong><?=View::e($user['username'])?></strong><?php if ((int)$user['id'] === (int)($currentUser['id'] ?? 0)): ?><span class="current-user-mark">現在のユーザー</span><?php endif; ?></td>
                     <td><span class="role-badge <?=$isRoot ? 'superuser' : 'viewer'?>"><?=View::e(UserAccountPolicy::roleLabel((string)$user['role']))?></span> <?=View::e(UserAccountPolicy::statusLabel((string)$user['account_status']))?></td>
                     <td><?=View::e(\Tenyendama\SeoWatch\EmailAddress::mask($user['email']))?></td>
-                    <td><?=View::e($user['last_login_at'] ?: '未ログイン')?></td>
+                    <td><?=$dateTime->time($user['last_login_at'] ?? null, false)?></td>
                     <td class="num">
                         <?php if ($isRoot): ?>
                             <span class="muted small-text">削除不可</span>

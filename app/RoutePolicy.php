@@ -8,6 +8,7 @@ final class RoutePolicy
     /** @var list<string> */
     private const SUPERUSER_ROUTES = [
         'settings',
+        'settings/timezone',
         'users',
         'users/create',
         'users/delete',

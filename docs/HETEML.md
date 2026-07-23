@@ -74,3 +74,6 @@ https://example.com/seo-watch/oauth-callback.php
 ```
 
 `/public`や末尾スラッシュを追加しないでください。
+# hetemlでのタイムゾーン
+
+PHPの標準タイムゾーンにかかわらず、SEO Watchの内部処理とMySQL接続セッションはUTC、利用者向け表示は管理画面で選んだIANAタイムゾーンを使用します。CronのSearch Console対象日はPT基準です。

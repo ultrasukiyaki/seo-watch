@@ -28,6 +28,11 @@ use Tenyendama\SeoWatch\AuthRateLimiter;
 use Tenyendama\SeoWatch\DisabledMailer;
 use Tenyendama\SeoWatch\PhpMailMailer;
 use Tenyendama\SeoWatch\UserActionTokenRepository;
+use Tenyendama\SeoWatch\AppSettings;
+use Tenyendama\SeoWatch\DateTimeFormatter;
+use Tenyendama\SeoWatch\SearchConsoleDate;
+use Tenyendama\SeoWatch\SystemClock;
+use Tenyendama\SeoWatch\TimezoneService;
 
 require_once __DIR__ . '/autoload.php';
 
@@ -36,7 +41,8 @@ if (!is_file($configPath)) {
     throw new RuntimeException('NOT_INSTALLED');
 }
 $config = Config::load($configPath);
-date_default_timezone_set((string)$config->get('app.timezone', 'Asia/Tokyo'));
+$phpDefaultTimezone = TimezoneService::phpDefaultOrUtc();
+date_default_timezone_set('UTC');
 
 if (PHP_SAPI !== 'cli') {
     $baseUrl = (string)$config->get('app.base_url', '');
@@ -60,6 +66,16 @@ if (PHP_SAPI !== 'cli') {
 $db = new Database($config);
 $pdo = $db->pdo();
 (new SchemaManager($pdo))->migrate();
+$settings = new AppSettings($pdo);
+$configuredTimezone = $settings->get(AppSettings::DISPLAY_TIMEZONE);
+$legacyTimezone = (string)$config->get('app.timezone', '');
+$displayTimezoneConfirmed = $configuredTimezone !== null && TimezoneService::isValid($configuredTimezone);
+$displayTimezone = $displayTimezoneConfirmed
+    ? $configuredTimezone
+    : (TimezoneService::isValid($legacyTimezone) ? $legacyTimezone : $phpDefaultTimezone);
+$clock = new SystemClock();
+$dateTime = new DateTimeFormatter($clock, $displayTimezone);
+$searchConsoleDate = new SearchConsoleDate($clock);
 
 $crypto = new Crypto((string)$config->get('app.key'));
 $http = new HttpClient();
@@ -76,7 +92,7 @@ $pageMetadata = new PageMetadataRepository($pdo);
 $titleResolver = new WordPressTitleResolver($config, $http, $pageMetadata, $urlNormalizer);
 $contentInspector = new WordPressContentInspector($config, $http, $pageMetadata, $urlNormalizer);
 $improvementAdvisor = new ImprovementAdvisor();
-$audit = new AuthenticationAuditLogger($pdo, (string)$config->get('app.key'));
+$audit = new AuthenticationAuditLogger($pdo, (string)$config->get('app.key'), $dateTime);
 $rateLimiter = new AuthRateLimiter($pdo, (string)$config->get('app.key'));
 $mailer = new DisabledMailer();
 if ((bool)$config->get('mail.enabled', false)) {
@@ -85,13 +101,14 @@ if ((bool)$config->get('mail.enabled', false)) {
         (string)$config->get('mail.from_name', $config->get('app.name'))
     );
 }
-$actionTokens = new UserActionTokenRepository($pdo);
+$actionTokens = new UserActionTokenRepository($pdo, $clock);
 $accountRecovery = new AccountRecoveryService(
     $pdo,
     $actionTokens,
     $mailer,
     $audit,
-    (string)$config->get('app.base_url')
+    (string)$config->get('app.base_url'),
+    $dateTime
 );
 $auth = new Auth($pdo, $audit);
 $userRepo = new UserRepository($pdo);
@@ -117,5 +134,10 @@ return compact(
     'rateLimiter',
     'mailer',
     'actionTokens',
-    'accountRecovery'
+    'accountRecovery',
+    'settings',
+    'clock',
+    'dateTime',
+    'searchConsoleDate',
+    'displayTimezoneConfirmed'
 );

@@ -13,6 +13,7 @@ final class SchemaManager
 
     public function migrate(): void
     {
+        $this->migrateSettings();
         $this->migrateUsers();
         $this->migrateAuthentication();
 
@@ -71,6 +72,23 @@ SQL);
             'page_metadata',
             'content_fetched_at',
             'ALTER TABLE page_metadata ADD COLUMN content_fetched_at DATETIME NULL AFTER content_status'
+        );
+    }
+
+    private function migrateSettings(): void
+    {
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS settings (
+    setting_key VARCHAR(190) NOT NULL PRIMARY KEY,
+    setting_value LONGTEXT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by_user_id BIGINT UNSIGNED NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        $this->ensureColumn(
+            'settings',
+            'updated_by_user_id',
+            'ALTER TABLE settings ADD COLUMN updated_by_user_id BIGINT UNSIGNED NULL AFTER updated_at'
         );
     }
 

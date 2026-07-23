@@ -14,7 +14,8 @@ final class AuthRateLimiter
     public function consume(string $action, string $dimension, string $value, int $limit, int $windowSeconds): bool
     {
         $keyHash = hash_hmac('sha256', $action . "\0" . $dimension . "\0" . strtolower($value), $this->key);
-        $cutoff = date('Y-m-d H:i:s', time() - $windowSeconds);
+        $cutoff = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
+            ->modify("-{$windowSeconds} seconds")->format('Y-m-d H:i:s');
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(

@@ -105,7 +105,7 @@ $deltaText = static function (float $value, int $decimals = 0, string $suffix = 
     <div class="card-head"><div><h2>🧾 WordPress記事情報</h2><p>REST APIから本文構造を点検</p></div></div>
     <dl class="info-list">
         <div><dt>取得状態</dt><dd><span class="status <?=$inspection['status'] === 'success' ? 'connected' : 'disconnected'?>"><?=View::e($inspection['status'] === 'success' ? '取得済み' : '未取得')?></span></dd></div>
-        <div><dt>最終更新</dt><dd><?=!empty($inspection['modified_at']) ? View::e((string)$inspection['modified_at']) . ' UTC' : '—'?></dd></div>
+        <div><dt>最終更新</dt><dd><?=$dateTime->time($inspection['modified_at'] ?? null)?></dd></div>
         <div><dt>既存見出し</dt><dd><?=number_format((int)$advice['existing_heading_count'])?>件</dd></div>
     </dl>
     <?php if (!empty($inspection['headings'])): ?>

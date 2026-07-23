@@ -12,7 +12,10 @@ final class UserActionTokenRepository
     public const INVITATION = 'invitation';
     public const EMAIL_VERIFICATION = 'email_verification';
 
-    public function __construct(private readonly PDO $pdo)
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly Clock $clock = new SystemClock()
+    )
     {
     }
 
@@ -26,7 +29,7 @@ final class UserActionTokenRepository
     ): array {
         $token = bin2hex(random_bytes(32));
         $hash = hash('sha256', $token);
-        $expires = date('Y-m-d H:i:s', time() + $ttlSeconds);
+        $expires = $this->clock->nowUtc()->modify("+{$ttlSeconds} seconds")->format('Y-m-d H:i:s');
         $this->pdo->beginTransaction();
         try {
             $this->pdo->prepare(
