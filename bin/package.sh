@@ -13,11 +13,13 @@ trap 'rm -rf "$tempdir"' EXIT
 
 mkdir -p "$tempdir/seo-watch"
 
-rsync -a --exclude='.git' --exclude='.github' --exclude='tests' --exclude='node_modules' --exclude='vendor' \
+rsync -a --exclude='.git' --exclude='.github' --exclude='.agents' --exclude='.codex' \
+    --exclude='tests' --exclude='node_modules' --exclude='vendor' \
     --exclude='config/local.php' --exclude='logs' --exclude='cache' --exclude='*.log' --exclude='*.tmp' \
+    --exclude='PR_BODY.md' --exclude='RELEASE_NOTES.md' \
     --exclude='bin/cron.sh' --exclude='bin/.htaccess' \
     "$REPO_ROOT"/ "$tempdir/seo-watch"
 
 cd "$tempdir"
 zip -r "$OUTPUT" seo-watch >/dev/null
-sha256sum "$OUTPUT" >"$CHECKSUMS"
+(cd "$REPO_ROOT" && sha256sum "$(basename "$OUTPUT")" >"$(basename "$CHECKSUMS")")

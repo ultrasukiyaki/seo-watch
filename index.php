@@ -78,6 +78,124 @@ function attachPageTitles(array $items, array $titles, string $urlKey = 'page_ur
 $route = (string)($_GET['r'] ?? 'dashboard');
 
 try {
+    if ($route === 'password-forgot') {
+        $message = null;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::verify($_POST['_csrf'] ?? null);
+            $identifier = trim((string)($_POST['identifier'] ?? ''));
+            $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+            $ipAllowed = $rateLimiter->consume('password_reset_request', 'ip', $ip, 5, 900);
+            $accountAllowed = $rateLimiter->consume('password_reset_request', 'account', $identifier, 3, 3600);
+            if ($ipAllowed && $accountAllowed) {
+                $accountRecovery->requestPasswordReset($identifier, $ip, (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            } else {
+                $audit->log('rate_limit_triggered', 'limited', null, null, ['action' => 'password_reset_request'], $ip);
+                usleep(350000);
+            }
+            $message = '登録情報が確認できた場合、パスワード再設定方法を送信しました。';
+        }
+        View::render('password-forgot', [
+            'title' => 'パスワード再設定',
+            'message' => $message,
+            'auth' => $auth,
+            'route' => $route,
+            'appName' => $config->get('app.name'),
+        ]);
+        exit;
+    }
+
+    if ($route === 'password-reset') {
+        header('Cache-Control: no-store');
+        header('Pragma: no-cache');
+        header('Referrer-Policy: no-referrer');
+        header('X-Robots-Tag: noindex, nofollow');
+        $token = (string)($_POST['token'] ?? $_GET['token'] ?? '');
+        $error = null;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::verify($_POST['_csrf'] ?? null);
+            try {
+                if ($accountRecovery->resetPassword(
+                    $token,
+                    (string)($_POST['password'] ?? ''),
+                    (string)($_POST['password_confirmation'] ?? '')
+                )) {
+                    flash('success', 'パスワードを変更しました。新しいパスワードでログインしてください。');
+                    redirectTo('login');
+                }
+                $error = '再設定できませんでした。URLを再確認するか、再設定をやり直してください。';
+            } catch (RuntimeException $e) {
+                $error = $e->getMessage();
+            }
+        }
+        $valid = $actionTokens->findValid($token, \Tenyendama\SeoWatch\UserActionTokenRepository::PASSWORD_RESET) !== null;
+        if (!$valid && $token !== '') {
+            $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+            $rateLimiter->consume('token_failure', 'ip', $ip, 10, 900);
+            $audit->log('password_reset_failed', 'invalid_token', null, null, [], $ip);
+        }
+        View::render('password-reset', [
+            'title' => 'パスワード再設定',
+            'token' => $token,
+            'valid' => $valid,
+            'error' => $error,
+            'auth' => $auth,
+            'route' => $route,
+            'appName' => $config->get('app.name'),
+        ]);
+        exit;
+    }
+
+    if ($route === 'email-verify') {
+        header('Cache-Control: no-store');
+        header('Referrer-Policy: no-referrer');
+        header('X-Robots-Tag: noindex, nofollow');
+        if ($accountRecovery->verifyEmail((string)($_GET['token'] ?? ''))) {
+            flash('success', 'メールアドレスを確認しました。');
+        } else {
+            flash('danger', '確認URLを利用できません。期限切れまたは使用済みの可能性があります。');
+        }
+        redirectTo($auth->check() ? 'account' : 'login');
+    }
+
+    if ($route === 'invitation') {
+        header('Cache-Control: no-store');
+        header('Pragma: no-cache');
+        header('Referrer-Policy: no-referrer');
+        header('X-Robots-Tag: noindex, nofollow');
+        $token = (string)($_POST['token'] ?? $_GET['token'] ?? '');
+        $error = null;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::verify($_POST['_csrf'] ?? null);
+            try {
+                if ($accountRecovery->acceptInvitation(
+                    $token,
+                    (string)($_POST['password'] ?? ''),
+                    (string)($_POST['password_confirmation'] ?? '')
+                )) {
+                    flash('success', '招待を受け入れました。設定したパスワードでログインしてください。');
+                    redirectTo('login');
+                }
+                $error = '招待を受け入れられませんでした。';
+            } catch (RuntimeException $e) {
+                $error = $e->getMessage();
+            }
+        }
+        $valid = $actionTokens->findValid(
+            $token,
+            \Tenyendama\SeoWatch\UserActionTokenRepository::INVITATION
+        ) !== null;
+        View::render('invitation', [
+            'title' => '招待',
+            'token' => $token,
+            'valid' => $valid,
+            'error' => $error,
+            'auth' => $auth,
+            'route' => $route,
+            'appName' => $config->get('app.name'),
+        ]);
+        exit;
+    }
+
     if ($route === 'login') {
         if ($auth->check()) {
             redirectTo('dashboard');
@@ -208,6 +326,46 @@ try {
         redirectTo('users');
     }
 
+    if ($route === 'users/invite') {
+        postOnly();
+        if (!$mailer->enabled()) {
+            flash('danger', 'メール送信が無効のため、メール招待は利用できません。');
+            redirectTo('users');
+        }
+        try {
+            $userId = $userRepo->createInvitation(
+                trim((string)($_POST['username'] ?? '')),
+                (string)($_POST['email'] ?? '')
+            );
+            if (!$accountRecovery->sendInvitation($userId, (int)$auth->user()['id'])) {
+                throw new RuntimeException('招待メールを送信できませんでした。');
+            }
+            $audit->log('invitation_created', 'success', (int)$auth->user()['id'], $userId);
+            flash('success', '閲覧ユーザーへ招待メールを送信しました。');
+        } catch (RuntimeException $e) {
+            flash('danger', $e->getMessage());
+        }
+        redirectTo('users');
+    }
+
+    if ($route === 'users/invite-resend') {
+        postOnly();
+        $actor = $auth->user();
+        $targetId = (int)($_POST['user_id'] ?? 0);
+        $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+        if (!$userRepo->verifyPassword((int)$actor['id'], (string)($_POST['current_password'] ?? ''))) {
+            flash('danger', 'スーパーユーザーの現在のパスワードが違います。');
+        } elseif (!$rateLimiter->consume('invitation_resend', 'ip', $ip, 10, 900)
+            || !$rateLimiter->consume('invitation_resend', 'account', (string)$targetId, 3, 3600)) {
+            $audit->log('rate_limit_triggered', 'limited', (int)$actor['id'], $targetId, ['action' => 'invitation_resend'], $ip);
+            flash('danger', 'しばらく時間をおいてから再度お試しください。');
+        } else {
+            $sent = $accountRecovery->sendInvitation($targetId, (int)$actor['id']);
+            flash($sent ? 'success' : 'danger', $sent ? '招待メールを再送しました。' : '招待メールを送信できませんでした。');
+        }
+        redirectTo('users');
+    }
+
     if ($route === 'users/delete') {
         postOnly();
         $userId = (int)($_POST['user_id'] ?? 0);
@@ -217,6 +375,115 @@ try {
             flash('success', '閲覧ユーザーを削除しました。対象ユーザーのログイン状態も次のアクセスで無効になります。');
         }
         redirectTo('users');
+    }
+
+    if ($route === 'account/password') {
+        postOnly();
+        $user = $auth->user();
+        try {
+            $version = $userRepo->changePassword(
+                (int)$user['id'],
+                (string)($_POST['current_password'] ?? ''),
+                (string)($_POST['password'] ?? ''),
+                (string)($_POST['password_confirmation'] ?? '')
+            );
+            $actionTokens->invalidateForUser((int)$user['id']);
+            $auth->refreshCurrentSession($version);
+            $audit->log('password_changed', 'success', (int)$user['id'], (int)$user['id']);
+            flash('success', 'パスワードを変更しました。他の端末のセッションは無効になりました。');
+        } catch (RuntimeException $e) {
+            $audit->log('password_changed', 'failure', (int)$user['id'], (int)$user['id']);
+            flash('danger', $e->getMessage());
+        }
+        redirectTo('account');
+    }
+
+    if ($route === 'account/email') {
+        postOnly();
+        $user = $auth->user();
+        try {
+            $accountRecovery->requestEmailChange(
+                (int)$user['id'],
+                (string)($_POST['current_password'] ?? ''),
+                (string)($_POST['email'] ?? '')
+            );
+            flash('success', '新しいメールアドレスへ確認メールを送信しました。');
+        } catch (RuntimeException $e) {
+            flash('danger', $e->getMessage());
+        }
+        redirectTo('account');
+    }
+
+    if ($route === 'users/status' || $route === 'users/sessions'
+        || $route === 'users/reset-link' || $route === 'users/reset-mail') {
+        postOnly();
+        $actor = $auth->user();
+        $targetId = (int)($_POST['user_id'] ?? 0);
+        if (!$userRepo->verifyPassword((int)$actor['id'], (string)($_POST['current_password'] ?? ''))) {
+            flash('danger', 'スーパーユーザーの現在のパスワードが違います。');
+            redirectTo('users');
+        }
+        if (in_array($route, ['users/reset-link', 'users/reset-mail'], true)) {
+            $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+            $limitedAction = str_replace('/', '_', $route);
+            if (!$rateLimiter->consume($limitedAction, 'ip', $ip, 10, 900)
+                || !$rateLimiter->consume($limitedAction, 'account', (string)$actor['id'], 5, 3600)) {
+                $audit->log('rate_limit_triggered', 'limited', (int)$actor['id'], $targetId, ['action' => $limitedAction], $ip);
+                flash('danger', 'しばらく時間をおいてから再度お試しください。');
+                redirectTo('users');
+            }
+        }
+        if ($route === 'users/status') {
+            $status = (string)($_POST['status'] ?? '');
+            $ok = $userRepo->setStatus($targetId, $status);
+            $audit->log($status === 'disabled' ? 'account_disabled' : 'account_enabled', $ok ? 'success' : 'failure', (int)$actor['id'], $targetId);
+            flash($ok ? 'success' : 'danger', $ok ? 'アカウント状態を変更しました。' : '対象の閲覧ユーザーが見つかりません。');
+        } elseif ($route === 'users/sessions') {
+            $ok = $userRepo->invalidateSessions($targetId);
+            $audit->log('sessions_invalidated', $ok ? 'success' : 'failure', (int)$actor['id'], $targetId);
+            flash($ok ? 'success' : 'danger', $ok ? '全セッションを無効化しました。' : '対象の閲覧ユーザーが見つかりません。');
+        } elseif ($route === 'users/reset-mail') {
+            $ok = $accountRecovery->sendResetForUser($targetId, (int)$actor['id']);
+            flash($ok ? 'success' : 'danger', $ok ? '再設定メールを送信しました。' : 'メールを送信できませんでした。');
+        } else {
+            $issued = $accountRecovery->issueResetForUser($targetId, (int)$actor['id']);
+            header('Cache-Control: no-store');
+            header('Pragma: no-cache');
+            header('Referrer-Policy: no-referrer');
+            header('X-Robots-Tag: noindex, nofollow');
+            View::render('manual-token', [
+                'title' => '再設定URL',
+                'manualUrl' => $issued['url'],
+                'expiresAt' => $issued['expires_at'],
+                'auth' => $auth,
+                'route' => $route,
+                'appName' => $config->get('app.name'),
+                'currentUser' => $actor,
+                'isSuperuser' => true,
+                'flashes' => [],
+            ]);
+            exit;
+        }
+        redirectTo('users');
+    }
+
+    if ($route === 'mail/test') {
+        postOnly();
+        $actor = $auth->user();
+        $account = $userRepo->find((int)$actor['id']);
+        if (!$userRepo->verifyPassword((int)$actor['id'], (string)($_POST['current_password'] ?? ''))) {
+            flash('danger', '現在のパスワードが違います。');
+        } elseif (!$rateLimiter->consume('mail_test', 'account', (string)$actor['id'], 3, 3600)) {
+            $audit->log('rate_limit_triggered', 'limited', (int)$actor['id'], (int)$actor['id'], ['action' => 'mail_test']);
+            flash('danger', 'しばらく時間をおいてから再度お試しください。');
+        } elseif (!$mailer->enabled() || empty($account['email']) || empty($account['email_verified_at'])) {
+            flash('danger', '確認済みのスーパーユーザーメールと有効なメール設定が必要です。');
+        } else {
+            $sent = $mailer->send((string)$account['email'], 'SEO Watch テストメール', "メール送信設定は正常です。\n");
+            $audit->log($sent ? 'mail_send_success' : 'mail_send_failure', $sent ? 'success' : 'failure', (int)$actor['id'], (int)$actor['id']);
+            flash($sent ? 'success' : 'danger', $sent ? 'テストメールを送信しました。' : 'テストメールを送信できませんでした。');
+        }
+        redirectTo('settings');
     }
 
     $activeProperty = $propertyRepo->active();
@@ -379,6 +646,31 @@ try {
         View::render('users', $common + [
             'title' => 'ユーザー管理',
             'users' => $userRepo->all(),
+            'mailEnabled' => $mailer->enabled(),
+        ]);
+        exit;
+    }
+
+    if ($route === 'account') {
+        View::render('account', $common + [
+            'title' => 'アカウント',
+            'account' => $userRepo->find((int)$currentUser['id']),
+            'mailEnabled' => $mailer->enabled(),
+        ]);
+        exit;
+    }
+
+    if ($route === 'audit') {
+        $filters = [
+            'event_type' => trim((string)($_GET['event_type'] ?? '')),
+            'outcome' => trim((string)($_GET['outcome'] ?? '')),
+            'from' => trim((string)($_GET['from'] ?? '')),
+            'to' => trim((string)($_GET['to'] ?? '')),
+        ];
+        View::render('audit', $common + [
+            'title' => '認証監査ログ',
+            'filters' => $filters,
+            'result' => $audit->recent($filters, max(1, (int)($_GET['p'] ?? 1))),
         ]);
         exit;
     }
@@ -488,6 +780,11 @@ try {
             'cronImportCommand' => $cronImportCommand,
             'cronWrapperCommand' => $cronWrapperCommand,
             'lastRun' => $lastRun,
+            'mailEnabled' => $mailer->enabled(),
+            'mailFromName' => (string)$config->get('mail.from_name', ''),
+            'mailFromAddress' => \Tenyendama\SeoWatch\EmailAddress::mask((string)$config->get('mail.from_address', '')),
+            'mailFunctionAvailable' => function_exists('mail'),
+            'superuserAccount' => $userRepo->find((int)$currentUser['id']),
         ]);
         exit;
     }

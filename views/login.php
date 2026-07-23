@@ -12,6 +12,7 @@ use Tenyendama\SeoWatch\View;
         <label>ユーザー名<input name="username" autocomplete="username" required autofocus></label>
         <label>パスワード<input type="password" name="password" autocomplete="current-password" required></label>
         <button class="button primary wide-button" type="submit">ログイン</button>
+        <p><a href="index.php?r=password-forgot">パスワードを忘れた方</a></p>
     </form>
     <?php require __DIR__ . '/partials/footer.php'; ?>
 </main>

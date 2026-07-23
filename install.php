@@ -33,6 +33,7 @@ $values = [
     'db_name' => '',
     'db_user' => '',
     'admin_user' => 'admin',
+    'admin_email' => '',
     'timezone' => 'Asia/Tokyo',
     'import_lag_days' => '3',
     'google_client_id' => '',
@@ -81,6 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($passwordError !== null) {
         $errors[] = $passwordError;
     }
+    try {
+        $values['admin_email'] = \Tenyendama\SeoWatch\EmailAddress::normalize($values['admin_email']);
+    } catch (RuntimeException $e) {
+        $errors[] = $e->getMessage();
+    }
 
     if ($values['google_client_id'] === '' || $googleClientSecret === '') {
         $errors[] = 'Google OAuthのクライアントIDとクライアントシークレットは必須です。';
@@ -119,13 +125,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->exec("UPDATE admins SET role = 'viewer' WHERE role = 'superuser'");
             $stmt = $pdo->prepare(
-                'INSERT INTO admins (username, password_hash, role) VALUES (:username, :password_hash, :role)
-                 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role), updated_at = CURRENT_TIMESTAMP'
+                'INSERT INTO admins (username, password_hash, role, email) VALUES (:username, :password_hash, :role, :email)
+                 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role),
+                 email = VALUES(email), updated_at = CURRENT_TIMESTAMP'
             );
             $stmt->execute([
                 'username' => $values['admin_user'],
                 'password_hash' => password_hash($adminPassword, PASSWORD_DEFAULT),
                 'role' => UserAccountPolicy::ROLE_SUPERUSER,
+                'email' => $values['admin_email'],
             ]);
 
             $baseUrl = rtrim($values['base_url'], '/');
@@ -153,6 +161,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'client_id' => $values['google_client_id'],
                     'client_secret' => $googleClientSecret,
                     'redirect_uri' => $baseUrl . '/oauth-callback.php',
+                ],
+                'mail' => [
+                    'enabled' => false,
+                    'from_address' => 'no-reply@example.com',
+                    'from_name' => '10yendama SEO Watch',
                 ],
             ];
 
@@ -245,7 +258,8 @@ $callbackUrl = rtrim($values['base_url'], '/') . '/oauth-callback.php';
             <h2>スーパーユーザー</h2>
             <p class="hint wide">ここで作成するアカウントだけが、Google連携・データ更新・設定変更・閲覧ユーザー管理を行えます。</p>
             <label>ユーザー名<input name="admin_user" value="<?=h($values['admin_user'])?>" minlength="3" maxlength="64" required></label>
-            <label>パスワード<input type="password" name="admin_pass" minlength="10" required></label>
+            <label>メールアドレス<input type="email" name="admin_email" value="<?=h($values['admin_email'])?>" autocomplete="email" required></label>
+            <label>パスワード<input type="password" name="admin_pass" minlength="12" maxlength="128" autocomplete="new-password" required></label>
 
             <h2>Google OAuth</h2>
             <p class="hint wide">OAuthクライアントは「ウェブ アプリケーション」で作成し、上に表示されたHTTPSコールバックURLを登録してください。</p>

@@ -22,6 +22,12 @@ use Tenyendama\SeoWatch\UrlNormalizer;
 use Tenyendama\SeoWatch\UserRepository;
 use Tenyendama\SeoWatch\WordPressTitleResolver;
 use Tenyendama\SeoWatch\WordPressContentInspector;
+use Tenyendama\SeoWatch\AccountRecoveryService;
+use Tenyendama\SeoWatch\AuthenticationAuditLogger;
+use Tenyendama\SeoWatch\AuthRateLimiter;
+use Tenyendama\SeoWatch\DisabledMailer;
+use Tenyendama\SeoWatch\PhpMailMailer;
+use Tenyendama\SeoWatch\UserActionTokenRepository;
 
 require_once __DIR__ . '/autoload.php';
 
@@ -70,7 +76,24 @@ $pageMetadata = new PageMetadataRepository($pdo);
 $titleResolver = new WordPressTitleResolver($config, $http, $pageMetadata, $urlNormalizer);
 $contentInspector = new WordPressContentInspector($config, $http, $pageMetadata, $urlNormalizer);
 $improvementAdvisor = new ImprovementAdvisor();
-$auth = new Auth($pdo);
+$audit = new AuthenticationAuditLogger($pdo, (string)$config->get('app.key'));
+$rateLimiter = new AuthRateLimiter($pdo, (string)$config->get('app.key'));
+$mailer = new DisabledMailer();
+if ((bool)$config->get('mail.enabled', false)) {
+    $mailer = new PhpMailMailer(
+        (string)$config->get('mail.from_address', ''),
+        (string)$config->get('mail.from_name', $config->get('app.name'))
+    );
+}
+$actionTokens = new UserActionTokenRepository($pdo);
+$accountRecovery = new AccountRecoveryService(
+    $pdo,
+    $actionTokens,
+    $mailer,
+    $audit,
+    (string)$config->get('app.base_url')
+);
+$auth = new Auth($pdo, $audit);
 $userRepo = new UserRepository($pdo);
 
 return compact(
@@ -89,5 +112,10 @@ return compact(
     'contentInspector',
     'improvementAdvisor',
     'auth',
-    'userRepo'
+    'userRepo',
+    'audit',
+    'rateLimiter',
+    'mailer',
+    'actionTokens',
+    'accountRecovery'
 );

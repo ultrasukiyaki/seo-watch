@@ -107,7 +107,7 @@ https://example.com/seo-watch/install.php
 - タイムゾーン
 - Search Console確定データ待機日数
 - MySQL接続情報
-- スーパーユーザー名とパスワード
+- スーパーユーザー名、回復用メールアドレス、パスワード
 - Google OAuthクライアントIDとシークレット
 
 インストーラーは次を実行します。
@@ -118,6 +118,8 @@ https://example.com/seo-watch/install.php
 - スーパーユーザー作成
 - 暗号化キー生成
 - `config/local.php` 作成
+
+アカウント回復メールは安全のため初期状態で無効です。インストール後に`config/local.php.example`を参考に`mail`設定を追加し、設定画面から確認済みスーパーユーザー宛てのテスト送信を行ってください。詳細は[アカウント回復・認証運用](ACCOUNT_RECOVERY.md)を参照してください。
 
 ## 7. Googleと連携する
 

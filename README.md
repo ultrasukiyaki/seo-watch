@@ -18,6 +18,8 @@ ComposerやNode.jsを使わず、PHPとMySQLだけで動作します。Apache系
 - URL正規化と既存データの統合
 - 非同期ページングによる高速な一覧表示
 - スーパーユーザーと複数の閲覧専用ユーザー
+- パスワード再設定、メール確認、閲覧ユーザー招待
+- セッション一括無効化、認証レート制限、認証監査ログ
 - OAuthトークンはAES-256-GCMで暗号化保存
 - ブラウザ手動取得とCLI/Cron取得
 
@@ -48,6 +50,7 @@ ComposerやNode.jsは不要です。
 - [Cronによる定期取得](docs/CRON.md)
 - [heteml向け補足](docs/HETEML.md)
 - [アップデート手順](docs/UPGRADING.md)
+- [アカウント回復・認証運用](docs/ACCOUNT_RECOVERY.md)
 
 ## ユーザー権限
 
@@ -58,6 +61,8 @@ ComposerやNode.jsは不要です。
 | Google OAuth・プロパティ設定 | ✓ | — |
 | データ取り込み・URL正規化 | ✓ | — |
 | 閲覧ユーザー作成・削除 | ✓ | — |
+| 自分のメール・パスワード変更 | ✓ | ✓ |
+| アカウント回復支援・監査ログ | ✓ | — |
 
 閲覧ユーザーはメニューが非表示になるだけでなく、直接URLへアクセスした場合もサーバー側で403になります。
 
@@ -75,6 +80,12 @@ php bin/import.php --start=2026-07-01 --end=2026-07-21
 
 # 既存URLを再正規化
 php bin/normalize.php
+
+# 緊急パスワードリセット（対話TTY必須）
+php bin/reset-password.php --user=admin
+
+# 期限切れ認証データと180日超の監査ログを整理
+php bin/purge-auth-data.php
 ```
 
 `bin/*.php` のshebangは汎用の `#!/usr/bin/env php` です。共有サーバー固有のPHPパスはソースへ直接書き込まず、Cronコマンドまたは `PHP_BIN` 環境変数で指定してください。
