@@ -13,7 +13,8 @@ final class AccountRecoveryService
         private readonly UserActionTokenRepository $tokens,
         private readonly MailerInterface $mailer,
         private readonly AuthenticationAuditLogger $audit,
-        private readonly string $baseUrl
+        private readonly string $baseUrl,
+        private readonly ?DateTimeFormatter $dateTime = null
     ) {
     }
 
@@ -36,7 +37,8 @@ final class AccountRecoveryService
             $sent = $this->mailer->send(
                 (string)$user['email'],
                 'パスワード再設定のご案内',
-                "パスワード再設定を受け付けました。\n\n{$url}\n\nこのURLは30分間、一度だけ利用できます。心当たりがなければ無視してください。"
+                "パスワード再設定を受け付けました。\n\n{$url}\n\n有効期限: " . $this->formatExpiry($issued['expires_at']) .
+                "\nこのURLは一度だけ利用できます。心当たりがなければ無視してください。"
             );
             $outcome = $sent ? 'sent' : 'send_failed';
             $this->audit->log($sent ? 'mail_send_success' : 'mail_send_failure', $outcome, null, $subjectId, [], $ip, $userAgent);
@@ -112,7 +114,7 @@ final class AccountRecoveryService
             (string)$email,
             'パスワード再設定のご案内',
             "管理者からパスワード再設定URLが発行されました。\n\n" . $this->url('password-reset', $issued['token']) .
-            "\n\nこのURLは30分間、一度だけ利用できます。"
+            "\n\n有効期限: " . $this->formatExpiry($issued['expires_at']) . "\nこのURLは一度だけ利用できます。"
         );
         $this->audit->log('password_reset_requested', $sent ? 'sent' : 'send_failed', $actorId, $userId);
         return $sent;
@@ -133,7 +135,7 @@ final class AccountRecoveryService
             (string)$email,
             'SEO Watchへの招待',
             "閲覧ユーザーとして招待されました。\n\n" . $this->url('invitation', $issued['token']) .
-            "\n\nこのURLは24時間、一度だけ利用できます。"
+            "\n\n有効期限: " . $this->formatExpiry($issued['expires_at']) . "\nこのURLは一度だけ利用できます。"
         );
         $this->audit->log('invitation_resent', $sent ? 'sent' : 'send_failed', $actorId, $userId);
         return $sent;
@@ -192,7 +194,7 @@ final class AccountRecoveryService
             $newEmail,
             'メールアドレス確認のご案内',
             "次のURLでメールアドレスを確認してください。\n\n" . $this->url('email-verify', $issued['token']) .
-            "\n\nこのURLは30分間、一度だけ利用できます。"
+            "\n\n有効期限: " . $this->formatExpiry($issued['expires_at']) . "\nこのURLは一度だけ利用できます。"
         );
         if (!$sent) {
             throw new RuntimeException('確認メールを送信できませんでした。設定を確認して再度お試しください。');
@@ -240,5 +242,10 @@ final class AccountRecoveryService
             throw new RuntimeException('アカウント回復にはHTTPSのapp.base_url設定が必要です。');
         }
         return rtrim($this->baseUrl, '/') . '/index.php?r=' . rawurlencode($route) . '&token=' . rawurlencode($token);
+    }
+
+    private function formatExpiry(string $expiresAt): string
+    {
+        return $this->dateTime?->mail($expiresAt) ?? $expiresAt . ' UTC';
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 use Tenyendama\SeoWatch\RuntimeEnvironment;
 use Tenyendama\SeoWatch\SchemaManager;
 use Tenyendama\SeoWatch\UserAccountPolicy;
+use Tenyendama\SeoWatch\TimezoneService;
+use Tenyendama\SeoWatch\AppSettings;
 
 require_once __DIR__ . '/app/autoload.php';
 
@@ -34,7 +36,7 @@ $values = [
     'db_user' => '',
     'admin_user' => 'admin',
     'admin_email' => '',
-    'timezone' => 'Asia/Tokyo',
+    'timezone' => TimezoneService::phpDefaultOrUtc(),
     'import_lag_days' => '3',
     'google_client_id' => '',
 ];
@@ -68,6 +70,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($values['db_host'] === '' || $values['db_user'] === '') {
         $errors[] = 'DBホストとDBユーザー名は必須です。';
+    }
+    if (!TimezoneService::isValid($values['timezone'])) {
+        $errors[] = '表示タイムゾーンは有効なIANAタイムゾーンから選択してください。';
     }
     $dbPort = (int)$values['db_port'];
     if ($dbPort < 1 || $dbPort > 65535) {
@@ -107,6 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
+            $pdo->exec("SET time_zone = '+00:00'");
 
             $schema = file_get_contents(__DIR__ . '/database/schema.sql');
             if (!is_string($schema)) {
@@ -135,13 +141,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'role' => UserAccountPolicy::ROLE_SUPERUSER,
                 'email' => $values['admin_email'],
             ]);
+            $adminId = (int)$pdo->query(
+                'SELECT id FROM admins WHERE username = ' . $pdo->quote($values['admin_user'])
+            )->fetchColumn();
+            (new AppSettings($pdo))->set(AppSettings::DISPLAY_TIMEZONE, $values['timezone'], $adminId);
 
             $baseUrl = rtrim($values['base_url'], '/');
             $config = [
                 'app' => [
                     'name' => '10yendama SEO Watch',
                     'base_url' => $baseUrl,
-                    'timezone' => $values['timezone'] ?: 'Asia/Tokyo',
+                    'timezone' => 'UTC',
                     'key' => 'base64:' . base64_encode(random_bytes(32)),
                     'session_name' => 'seo_watch_session',
                     'import_lag_days' => max(1, min(7, (int)$values['import_lag_days'])),
@@ -244,7 +254,14 @@ $callbackUrl = rtrim($values['base_url'], '/') . '/oauth-callback.php';
             <h2>アプリ</h2>
             <label class="wide">公開ベースURL<input name="base_url" value="<?=h($values['base_url'])?>" required></label>
             <p class="hint wide">例: https://www.example.com/seo-watch（末尾のスラッシュ、install.php、oauth-callback.phpは付けません）</p>
-            <label>タイムゾーン<input name="timezone" value="<?=h($values['timezone'])?>" required></label>
+            <label>表示タイムゾーン
+                <select name="timezone" required>
+                    <?php foreach (TimezoneService::identifiers() as $timezone): ?>
+                    <option value="<?=h($timezone)?>" <?=$timezone === $values['timezone'] ? 'selected' : ''?>><?=h($timezone)?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <p class="hint wide">画面、メール、CLIで日時を表示するときに使用します。データベースへの保存はUTCで行われます。</p>
             <label>確定データ待機日数<input type="number" name="import_lag_days" min="1" max="7" value="<?=h($values['import_lag_days'])?>"></label>
 
             <h2>MySQL</h2>

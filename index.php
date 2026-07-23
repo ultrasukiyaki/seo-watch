@@ -281,6 +281,24 @@ try {
         redirectTo('settings');
     }
 
+    if ($route === 'settings/timezone') {
+        postOnly();
+        $timezone = trim((string)($_POST['display_timezone'] ?? ''));
+        if (!\Tenyendama\SeoWatch\TimezoneService::isValid($timezone)) {
+            flash('danger', '有効なIANAタイムゾーンを選択してください。');
+            redirectTo('settings');
+        }
+        $actor = $auth->user();
+        $previous = $dateTime->timezoneName();
+        $settings->set(\Tenyendama\SeoWatch\AppSettings::DISPLAY_TIMEZONE, $timezone, (int)$actor['id']);
+        $audit->log('display_timezone_changed', 'success', (int)$actor['id'], null, [
+            'previous_timezone' => $previous,
+            'new_timezone' => $timezone,
+        ]);
+        flash('success', '表示タイムゾーンを ' . $timezone . ' へ変更しました。');
+        redirectTo('settings');
+    }
+
     if ($route === 'import/run') {
         postOnly();
         set_time_limit(0);
@@ -290,10 +308,9 @@ try {
         }
         $days = max(1, min(90, (int)($_POST['days'] ?? 7)));
         $lag = max(1, min(7, (int)$config->get('app.import_lag_days', 3)));
-        $end = (new DateTimeImmutable('today', new DateTimeZone('America/Los_Angeles')))->modify("-{$lag} days");
-        $start = $end->modify('-' . ($days - 1) . ' days');
-        $rows = $importer->import($active, $start->format('Y-m-d'), $end->format('Y-m-d'));
-        flash('success', number_format($rows) . "行を取り込みました（{$start->format('Y-m-d')}〜{$end->format('Y-m-d')}）。URL正規化も反映済みです。");
+        $range = $searchConsoleDate->importRange($days, $lag);
+        $rows = $importer->import($active, $range['start'], $range['end']);
+        flash('success', number_format($rows) . "行を取り込みました（{$range['start']}〜{$range['end']}、Search Console基準日 PT）。URL正規化も反映済みです。");
         redirectTo('dashboard');
     }
 
@@ -497,6 +514,7 @@ try {
         'activeProperty' => $activeProperty,
         'currentUser' => $currentUser,
         'isSuperuser' => $isSuperuser,
+        'dateTime' => $dateTime,
     ];
 
     if ($route === 'dashboard') {
@@ -730,6 +748,43 @@ try {
             'message' => 'データベース接続は正常に読み込まれました。',
             'type' => 'ok',
         ];
+        $dbTimezones = $pdo->query('SELECT @@session.time_zone AS session_timezone, @@system_time_zone AS system_timezone')->fetch();
+        $diagnostics[] = [
+            'label' => 'DBセッションタイムゾーン',
+            'status' => ($dbTimezones['session_timezone'] ?? '') === '+00:00' ? '正常' : 'エラー',
+            'message' => (string)($dbTimezones['session_timezone'] ?? '取得不可'),
+            'type' => ($dbTimezones['session_timezone'] ?? '') === '+00:00' ? 'ok' : 'error',
+        ];
+        $diagnostics[] = [
+            'label' => 'DBサーバーシステムタイムゾーン',
+            'status' => '情報',
+            'message' => (string)($dbTimezones['system_timezone'] ?? '取得不可') . '（接続セッションはUTC固定）',
+            'type' => 'info',
+        ];
+        $diagnostics[] = [
+            'label' => 'PHP標準タイムゾーン',
+            'status' => '情報',
+            'message' => date_default_timezone_get() . '（内部処理はUTC固定）',
+            'type' => 'info',
+        ];
+        $diagnostics[] = [
+            'label' => 'アプリ表示タイムゾーン',
+            'status' => $displayTimezoneConfirmed ? '正常' : '注意',
+            'message' => $dateTime->timezoneName() . ($displayTimezoneConfirmed ? '' : '（未確認。設定画面で確認してください）'),
+            'type' => $displayTimezoneConfirmed ? 'ok' : 'warning',
+        ];
+        $diagnostics[] = [
+            'label' => '現在日時',
+            'status' => '情報',
+            'message' => 'UTC: ' . $dateTime->nowUtc()->format('Y-m-d H:i:s T') . ' / 表示: ' . $dateTime->detail($dateTime->nowUtc()),
+            'type' => 'info',
+        ];
+        $diagnostics[] = [
+            'label' => 'Search Console基準',
+            'status' => '正常',
+            'message' => \Tenyendama\SeoWatch\SearchConsoleDate::TIMEZONE . ' / ' . $searchConsoleDate->today() . ' PT',
+            'type' => 'ok',
+        ];
 
         $oauthConfigured = (string)$config->get('google.client_id') !== '' && (string)$config->get('google.client_secret') !== '';
         $oauthConnected = $oauth->connected();
@@ -785,6 +840,9 @@ try {
             'mailFromAddress' => \Tenyendama\SeoWatch\EmailAddress::mask((string)$config->get('mail.from_address', '')),
             'mailFunctionAvailable' => function_exists('mail'),
             'superuserAccount' => $userRepo->find((int)$currentUser['id']),
+            'timezoneIdentifiers' => \Tenyendama\SeoWatch\TimezoneService::identifiers(),
+            'displayTimezoneConfirmed' => $displayTimezoneConfirmed,
+            'searchConsoleDate' => $searchConsoleDate,
         ]);
         exit;
     }

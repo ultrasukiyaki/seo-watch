@@ -104,7 +104,7 @@ https://example.com/seo-watch/install.php
 入力項目:
 
 - 公開ベースURL
-- タイムゾーン
+- 表示タイムゾーン（IANA識別子。画面・メール・CLI用。DB保存はUTC）
 - Search Console確定データ待機日数
 - MySQL接続情報
 - スーパーユーザー名、回復用メールアドレス、パスワード

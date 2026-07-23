@@ -3,6 +3,27 @@ use Tenyendama\SeoWatch\Csrf;
 use Tenyendama\SeoWatch\View;
 ?>
 <div class="settings-grid">
+<?php if (!$displayTimezoneConfirmed): ?><div class="alert warning full-span">表示タイムゾーンが未確認です。設定画面で利用地域のタイムゾーンを確認してください。</div><?php endif; ?>
+<section class="card">
+    <h2>表示タイムゾーン</h2>
+    <form method="post" action="index.php?r=settings/timezone">
+        <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
+        <label>表示タイムゾーン
+            <select name="display_timezone" required>
+            <?php foreach ($timezoneIdentifiers as $timezone): ?>
+                <option value="<?=View::e($timezone)?>" <?=$timezone === $dateTime->timezoneName() ? 'selected' : ''?>><?=View::e($timezone)?></option>
+            <?php endforeach; ?>
+            </select>
+        </label>
+        <p class="hint">IANAタイムゾーンを使用します。変更してもDB内のUTC日時は書き換えません。</p>
+        <button class="button primary" type="submit">保存</button>
+    </form>
+    <dl class="install-summary">
+        <div><dt>現在の表示例</dt><dd><?=View::e($dateTime->detail($dateTime->nowUtc()))?></dd></div>
+        <div><dt>現在のUTC</dt><dd><?=View::e($dateTime->nowUtc()->format('Y-m-d H:i:s T'))?></dd></div>
+        <div><dt>Search Console基準日</dt><dd><?=View::e($searchConsoleDate->today())?> PT</dd></div>
+    </dl>
+</section>
 <section class="card">
     <div class="card-head"><div><h2>Google Search Console</h2><p>読み取り専用スコープで接続</p></div><span class="status <?=$oauthConnected ? 'connected' : 'disconnected'?>"><?=$oauthConnected ? '接続済み' : '未接続'?></span></div>
     <label class="copy-label">承認済みリダイレクトURI<input readonly value="<?=View::e($redirectUri)?>"></label>
@@ -90,7 +111,7 @@ use Tenyendama\SeoWatch\View;
         <div><strong>アプリケーションパス</strong><p><?=View::e($appRootPath)?></p></div>
         <div><strong>推奨Cronコマンド</strong><pre><?=View::e($cronImportCommand)?></pre></div>
         <div><strong>ラッパー利用例</strong><pre><?=View::e($cronWrapperCommand)?></pre></div>
-        <div><strong>最終データ取得</strong><p><?=View::e($lastRun ? $lastRun['started_at'] . '（' . $lastRun['start_date'] . '〜' . $lastRun['end_date'] . '）' : 'データ取得履歴がありません。')?></p></div>
+        <div><strong>最終データ取得</strong><p><?=$lastRun ? $dateTime->time($lastRun['started_at'], false) . '（' . View::e($lastRun['start_date']) . '〜' . View::e($lastRun['end_date']) . '、PT）' : 'データ取得履歴がありません。'?></p></div>
     </div>
     <div class="hint">
         <p>サーバーによってPHP実行パスが異なるため、SSHや管理画面で <code>command -v php</code> を実行して確認してください。</p>
@@ -100,11 +121,11 @@ use Tenyendama\SeoWatch\View;
 </section>
 
 <section class="card full-span">
-    <h2>最近の取り込み履歴</h2>
+    <h2>最近の取り込み履歴</h2><p class="hint">表示時刻: <?=View::e($dateTime->timezoneName())?> / 期間: Search Console基準日（PT）</p>
     <div class="table-card flat">
     <table><thead><tr><th>開始</th><th>期間</th><th>状態</th><th class="num">行数</th><th>メッセージ</th></tr></thead><tbody>
     <?php if (!$runs): ?><tr><td colspan="5" class="empty-cell">履歴はありません。</td></tr><?php endif; ?>
-    <?php foreach ($runs as $run): ?><tr><td><?=View::e($run['started_at'])?></td><td><?=View::e($run['start_date'])?> 〜 <?=View::e($run['end_date'])?></td><td><span class="status <?=$run['status'] === 'success' ? 'connected' : ($run['status'] === 'failed' ? 'disconnected' : '')?>"><?=View::e($run['status'])?></span></td><td class="num"><?=number_format((int)$run['rows_imported'])?></td><td><?=View::e($run['message'] ?? '')?></td></tr><?php endforeach; ?>
+    <?php foreach ($runs as $run): ?><tr><td><?=$dateTime->time($run['started_at'], false)?></td><td><?=View::e($run['start_date'])?> 〜 <?=View::e($run['end_date'])?></td><td><span class="status <?=$run['status'] === 'success' ? 'connected' : ($run['status'] === 'failed' ? 'disconnected' : '')?>"><?=View::e($run['status'])?></span></td><td class="num"><?=number_format((int)$run['rows_imported'])?></td><td><?=View::e($run['message'] ?? '')?></td></tr><?php endforeach; ?>
     </tbody></table>
     </div>
 </section>

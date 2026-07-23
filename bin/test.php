@@ -6,6 +6,10 @@ use Tenyendama\SeoWatch\EmailAddress;
 use Tenyendama\SeoWatch\PasswordPolicy;
 use Tenyendama\SeoWatch\PhpMailMailer;
 use Tenyendama\SeoWatch\RoutePolicy;
+use Tenyendama\SeoWatch\DateTimeFormatter;
+use Tenyendama\SeoWatch\FrozenClock;
+use Tenyendama\SeoWatch\SearchConsoleDate;
+use Tenyendama\SeoWatch\TimezoneService;
 
 require_once dirname(__DIR__) . '/app/autoload.php';
 
@@ -69,6 +73,61 @@ $test('reset pages use protective headers', function () use ($assert): void {
     foreach (['Cache-Control: no-store', 'Referrer-Policy: no-referrer', 'X-Robots-Tag: noindex, nofollow'] as $header) {
         $assert(is_string($source) && str_contains($source, $header), $header);
     }
+});
+$test('UTC display conversions and formats', function () use ($assert): void {
+    $clock = new FrozenClock('2026-07-23T08:42:10Z');
+    $tokyo = new DateTimeFormatter($clock, 'Asia/Tokyo');
+    $london = new DateTimeFormatter($clock, 'Europe/London');
+    $losAngeles = new DateTimeFormatter($clock, 'America/Los_Angeles');
+    $value = '2026-07-23 08:42:10';
+    $assert($tokyo->short($value) === '2026-07-23 17:42');
+    $assert($tokyo->detail($value) === '2026-07-23 17:42:10 JST');
+    $assert($tokyo->mail($value) === '2026-07-23 17:42:10 JST (Asia/Tokyo)');
+    $assert($london->detail($value) === '2026-07-23 09:42:10 BST');
+    $assert($losAngeles->detail($value) === '2026-07-23 01:42:10 PDT');
+    $assert($tokyo->isoUtc($value) === '2026-07-23T08:42:10Z');
+    $assert(str_contains($tokyo->time($value), 'datetime="2026-07-23T08:42:10Z"'));
+});
+$test('DST boundaries are timezone aware', function () use ($assert): void {
+    $spring = new DateTimeFormatter(new FrozenClock('2026-03-08T09:59:59Z'), 'America/Los_Angeles');
+    $assert($spring->detail($spring->nowUtc()) === '2026-03-08 01:59:59 PST');
+    $springAfter = new DateTimeFormatter(new FrozenClock('2026-03-08T10:00:00Z'), 'America/Los_Angeles');
+    $assert($springAfter->detail($springAfter->nowUtc()) === '2026-03-08 03:00:00 PDT');
+    $fall = new DateTimeFormatter(new FrozenClock('2026-11-01T08:59:59Z'), 'America/Los_Angeles');
+    $assert($fall->detail($fall->nowUtc()) === '2026-11-01 01:59:59 PDT');
+    $fallAfter = new DateTimeFormatter(new FrozenClock('2026-11-01T09:00:00Z'), 'America/Los_Angeles');
+    $assert($fallAfter->detail($fallAfter->nowUtc()) === '2026-11-01 01:00:00 PST');
+});
+$test('strict database datetime and safe fallback', function () use ($assert): void {
+    $formatter = new DateTimeFormatter(new FrozenClock('2026-01-01T00:00:00Z'), 'UTC');
+    $assert($formatter->parseDatabase('2026-02-29 00:00:00') === null);
+    $assert($formatter->short(null) === '—');
+    $assert($formatter->detail('not-a-date') === '—');
+});
+$test('IANA timezone validation and fallback', function () use ($assert): void {
+    $assert(TimezoneService::isValid('Asia/Tokyo'));
+    $assert(!TimezoneService::isValid('UTC+09:00'));
+    $formatter = new DateTimeFormatter(new FrozenClock('2026-01-01T00:00:00Z'), 'invalid/timezone');
+    $assert($formatter->timezoneName() === 'UTC');
+});
+$test('Search Console dates remain PT DATE values', function () use ($assert): void {
+    $before = new SearchConsoleDate(new FrozenClock('2026-03-08T07:30:00Z'));
+    $after = new SearchConsoleDate(new FrozenClock('2026-03-08T10:30:00Z'));
+    $assert($before->today() === '2026-03-07');
+    $assert($after->today() === '2026-03-08');
+    $range = $after->importRange(3, 1);
+    $assert($range === ['start' => '2026-03-05', 'end' => '2026-03-07']);
+});
+$test('viewer cannot change timezone', function () use ($assert): void {
+    $assert(RoutePolicy::requiresSuperuser('settings/timezone'));
+});
+$test('database connection fixes session timezone', function () use ($assert): void {
+    $source = file_get_contents(dirname(__DIR__) . '/app/Database.php');
+    $assert(is_string($source) && str_contains($source, "SET time_zone = '+00:00'"));
+});
+$test('migration does not offset existing datetimes', function () use ($assert): void {
+    $source = file_get_contents(dirname(__DIR__) . '/app/SchemaManager.php');
+    $assert(is_string($source) && !preg_match('/DATE_ADD\\s*\\([^)]*INTERVAL\\s+9\\s+HOUR/i', $source));
 });
 
 $failed = 0;

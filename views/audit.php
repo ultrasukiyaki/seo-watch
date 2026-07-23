@@ -1,6 +1,6 @@
 <?php use Tenyendama\SeoWatch\View; ?>
 <section class="card">
-<h2>認証監査ログ</h2>
+<h2>認証監査ログ</h2><p class="hint">表示時刻: <?=View::e($dateTime->timezoneName())?></p>
 <form method="get" class="inline-form">
     <input type="hidden" name="r" value="audit">
     <input name="event_type" value="<?=View::e($filters['event_type'] ?? '')?>" placeholder="イベント種別">
@@ -14,7 +14,7 @@
 <tbody>
 <?php if (!$result['rows']): ?><tr><td colspan="5">記録はありません。</td></tr><?php endif; ?>
 <?php foreach ($result['rows'] as $row): ?><tr>
-<td><?=View::e($row['created_at'])?></td><td><?=View::e($row['event_type'])?></td><td><?=View::e($row['outcome'])?></td>
+<td><?=$dateTime->time($row['created_at'])?></td><td><?=View::e($row['event_type'])?></td><td><?=View::e($row['outcome'])?></td>
 <td><?=View::e($row['actor_user_id'] ?? '-')?></td><td><?=View::e($row['subject_user_id'] ?? '-')?></td>
 </tr><?php endforeach; ?>
 </tbody></table></div>

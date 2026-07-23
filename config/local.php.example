@@ -3,7 +3,8 @@ return [
     'app' => [
         'name' => '10yendama SEO Watch',
         'base_url' => 'https://example.com/seo-watch',
-        'timezone' => 'Asia/Tokyo',
+        // PHP内部処理用。利用者向け表示は管理画面のIANAタイムゾーン設定を使用します。
+        'timezone' => 'UTC',
         'key' => 'base64:REPLACE_WITH_32_BYTE_BASE64_KEY',
         'session_name' => 'seo_watch_session',
         'import_lag_days' => 3,

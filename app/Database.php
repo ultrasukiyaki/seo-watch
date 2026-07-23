@@ -22,6 +22,11 @@ final class Database
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
+        try {
+            $this->pdo->exec("SET time_zone = '+00:00'");
+        } catch (\PDOException $e) {
+            throw new \RuntimeException('DBセッションをUTCへ設定できません。', 0, $e);
+        }
     }
 
     public function pdo(): PDO

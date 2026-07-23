@@ -1,5 +1,7 @@
 # 10yendama SEO Watch
 
+現在のバージョンはv0.9.0です。UTC保存、表示タイムゾーン、Search ConsoleのPT基準日の詳細は[タイムゾーンガイド](docs/TIMEZONES.md)を参照してください。
+
 ![screenshot](./screenshot.png)
 
 Google Search Consoleの実検索データを蓄積し、**伸ばすべき記事・狙い目検索語・改善候補**を提示するセルフホスト型SEO管理ツールです。

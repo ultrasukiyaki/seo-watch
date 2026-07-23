@@ -7,7 +7,11 @@ use PDO;
 
 final class AuthenticationAuditLogger
 {
-    public function __construct(private readonly PDO $pdo, private readonly string $key)
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly string $key,
+        private readonly ?DateTimeFormatter $dateTime = null
+    )
     {
     }
 
@@ -54,12 +58,18 @@ final class AuthenticationAuditLogger
             }
         }
         if (!empty($filters['from'])) {
-            $where[] = 'created_at >= :from_date';
-            $params['from_date'] = (string)$filters['from'] . ' 00:00:00';
+            $from = $this->dateTime?->localDateBoundaryToUtc((string)$filters['from']);
+            if ($from !== null || $this->dateTime === null) {
+                $where[] = 'created_at >= :from_date';
+                $params['from_date'] = $from ?? (string)$filters['from'] . ' 00:00:00';
+            }
         }
         if (!empty($filters['to'])) {
-            $where[] = 'created_at < DATE_ADD(:to_date, INTERVAL 1 DAY)';
-            $params['to_date'] = (string)$filters['to'];
+            $to = $this->dateTime?->localDateBoundaryToUtc((string)$filters['to'], true);
+            if ($to !== null || $this->dateTime === null) {
+                $where[] = 'created_at < :to_date';
+                $params['to_date'] = $to ?? (string)$filters['to'] . ' 23:59:59';
+            }
         }
         $sqlWhere = $where ? ' WHERE ' . implode(' AND ', $where) : '';
         $count = $this->pdo->prepare('SELECT COUNT(*) FROM authentication_audit_logs' . $sqlWhere);

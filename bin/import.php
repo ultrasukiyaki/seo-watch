@@ -14,19 +14,20 @@ if (!$active) {
 
 try {
     $lag = max(1, min(7, (int)$config->get('app.import_lag_days', 3)));
-    $end = isset($options['end'])
-        ? new DateTimeImmutable((string)$options['end'])
-        : (new DateTimeImmutable('today', new DateTimeZone('America/Los_Angeles')))->modify("-{$lag} days");
+    $end = isset($options['end']) ? $searchConsoleDate->validate((string)$options['end']) : null;
     if (isset($options['start'])) {
-        $start = new DateTimeImmutable((string)$options['start']);
+        $start = $searchConsoleDate->validate((string)$options['start']);
     } else {
         $days = max(1, min(365, (int)($options['days'] ?? 3)));
-        $start = $end->modify('-' . ($days - 1) . ' days');
+        $range = $searchConsoleDate->importRange($days, $lag);
+        $start = $range['start'];
+        $end ??= $range['end'];
     }
+    $end ??= $searchConsoleDate->importRange(1, $lag)['end'];
     if ($start > $end) throw new RuntimeException('開始日は終了日以前にしてください。');
 
-    printf("[%s] Import %s: %s -> %s\n", date('c'), $active['site_url'], $start->format('Y-m-d'), $end->format('Y-m-d'));
-    $rows = $importer->import($active, $start->format('Y-m-d'), $end->format('Y-m-d'));
+    printf("[%s] Import %s: %s -> %s (Search Console date, PT)\n", $dateTime->detail($dateTime->nowUtc()), $active['site_url'], $start, $end);
+    $rows = $importer->import($active, $start, $end);
     printf("Done: %s rows\n", number_format($rows));
 } catch (Throwable $e) {
     fwrite(STDERR, 'ERROR: ' . $e->getMessage() . PHP_EOL);
