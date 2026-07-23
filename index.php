@@ -5,6 +5,7 @@ use Tenyendama\SeoWatch\Csrf;
 use Tenyendama\SeoWatch\ForbiddenException;
 use Tenyendama\SeoWatch\Paginator;
 use Tenyendama\SeoWatch\RoutePolicy;
+use Tenyendama\SeoWatch\RuntimeEnvironment;
 use Tenyendama\SeoWatch\View;
 
 try {
@@ -385,13 +386,108 @@ try {
     if ($route === 'settings') {
         $properties = $propertyRepo->all();
         $runs = $activeProperty ? $analytics->recentRuns((int)$activeProperty['id']) : [];
+        $configPath = __DIR__ . '/config/local.php';
+        $diagnostics = [];
+
+        $phpVersionOk = version_compare(PHP_VERSION, '8.1.0', '>=');
+        $diagnostics[] = [
+            'label' => 'PHPバージョン',
+            'status' => $phpVersionOk ? '正常' : 'エラー',
+            'message' => $phpVersionOk
+                ? '現在のPHPバージョンは ' . PHP_VERSION . ' です。' 
+                : 'PHP 8.1以上が必要です。現在のPHPバージョンは ' . PHP_VERSION . ' です。',
+            'type' => $phpVersionOk ? 'ok' : 'error',
+        ];
+
+        foreach (['pdo_mysql' => 'PDO MySQL', 'curl' => 'cURL', 'openssl' => 'OpenSSL', 'json' => 'JSON', 'mbstring' => 'mbstring'] as $extension => $name) {
+            $loaded = extension_loaded($extension);
+            $diagnostics[] = [
+                'label' => $name,
+                'status' => $loaded ? '正常' : 'エラー',
+                'message' => $loaded
+                    ? $name . '拡張が読み込まれています。'
+                    : $name . '拡張が利用できません。サーバー管理画面でPHPの' . $name . '拡張を有効にしてください。',
+                'type' => $loaded ? 'ok' : 'error',
+            ];
+        }
+
+        $https = RuntimeEnvironment::requestIsHttps();
+        $diagnostics[] = [
+            'label' => 'HTTPS',
+            'status' => $https ? '正常' : '注意',
+            'message' => $https
+                ? 'HTTPS経由でアクセスされています。' 
+                : '公開環境ではHTTPSを必須にしてください。サーバー設定またはリバースプロキシでHTTPSを有効にしてください。',
+            'type' => $https ? 'ok' : 'warning',
+        ];
+
+        $configExists = is_file($configPath);
+        $configReadable = is_readable($configPath);
+        $diagnostics[] = [
+            'label' => 'config/local.php',
+            'status' => $configExists && $configReadable ? '正常' : 'エラー',
+            'message' => $configExists
+                ? ($configReadable ? '設定ファイルが存在し、読み込み可能です。' : '設定ファイルは存在しますが、読み込み権限がありません。')
+                : '設定ファイルが見つかりません。インストールを完了してください。',
+            'type' => $configExists && $configReadable ? 'ok' : 'error',
+        ];
+
+        $diagnostics[] = [
+            'label' => 'DB接続',
+            'status' => '正常',
+            'message' => 'データベース接続は正常に読み込まれました。',
+            'type' => 'ok',
+        ];
+
+        $oauthConfigured = (string)$config->get('google.client_id') !== '' && (string)$config->get('google.client_secret') !== '';
+        $oauthConnected = $oauth->connected();
+        $diagnostics[] = [
+            'label' => 'Google OAuth設定',
+            'status' => $oauthConfigured ? '正常' : '注意',
+            'message' => $oauthConfigured
+                ? 'OAuthクライアントIDとシークレットが設定されています。' 
+                : 'Google OAuthクライアントIDとシークレットを設定してください。',
+            'type' => $oauthConfigured ? 'ok' : 'warning',
+        ];
+
+        $diagnostics[] = [
+            'label' => 'Google連携',
+            'status' => $oauthConnected ? '正常' : '注意',
+            'message' => $oauthConnected
+                ? 'Googleと連携済みです。' 
+                : 'Google連携が完了していません。設定画面から「Googleと連携する」を実行してください。',
+            'type' => $oauthConnected ? 'ok' : 'warning',
+        ];
+
+        $activePropertyStatus = $activeProperty !== null;
+        $diagnostics[] = [
+            'label' => 'Search Consoleプロパティ選択',
+            'status' => $activePropertyStatus ? '正常' : '注意',
+            'message' => $activePropertyStatus
+                ? '分析対象プロパティが選択されています。' 
+                : '分析対象プロパティが選択されていません。プロパティを選択してください。',
+            'type' => $activePropertyStatus ? 'ok' : 'warning',
+        ];
+
+        $lastRun = $runs[0] ?? null;
+        $phpCliPath = PHP_BINARY ?: 'php';
+        $appPath = realpath(__DIR__);
+        $cronImportCommand = sprintf('%s %s/bin/import.php --days=3', $phpCliPath, $appPath);
+        $cronWrapperCommand = sprintf('PHP_BIN=%s %s/bin/cron.sh', $phpCliPath, $appPath);
+
         View::render('settings', $common + [
             'title' => '設定',
-            'oauthConnected' => $oauth->connected(),
+            'oauthConnected' => $oauthConnected,
             'properties' => $properties,
             'runs' => $runs,
             'redirectUri' => $config->get('google.redirect_uri'),
             'importLagDays' => $config->get('app.import_lag_days', 3),
+            'diagnostics' => $diagnostics,
+            'cliPhpPath' => $phpCliPath,
+            'appRootPath' => $appPath,
+            'cronImportCommand' => $cronImportCommand,
+            'cronWrapperCommand' => $cronWrapperCommand,
+            'lastRun' => $lastRun,
         ]);
         exit;
     }

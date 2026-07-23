@@ -10,7 +10,7 @@ $loggedIn = isset($auth) && $auth->check();
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title><?=View::e($title ?? '')?> | <?=View::e($appName ?? '10yendama SEO Watch')?></title>
-<link rel="stylesheet" href="assets/app.css?v=0.5.0">
+<link rel="stylesheet" href="assets/app.css?v=0.7.0">
 </head>
 <body>
 <?php if ($loggedIn): ?>
@@ -46,10 +46,12 @@ $loggedIn = isset($auth) && $auth->check();
         <?php foreach (($flashes ?? []) as $flash): ?><div class="alert <?=View::e($flash['type'])?>"><?=View::e($flash['message'])?></div><?php endforeach; ?>
         <?=$content?>
     </main>
+    <?php require __DIR__ . '/partials/footer.php'; ?>
 </div>
 <?php else: ?>
     <?=$content?>
+    <?php require __DIR__ . '/partials/footer.php'; ?>
 <?php endif; ?>
-<script src="assets/app.js?v=0.5.0" defer></script>
+<script src="assets/app.js?v=0.7.0" defer></script>
 </body>
 </html>

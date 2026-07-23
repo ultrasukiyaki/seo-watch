@@ -52,6 +52,37 @@ use Tenyendama\SeoWatch\View;
     <?php endif; ?>
 </section>
 
+<section class="card">
+    <h2>サーバー環境診断</h2>
+    <p class="hint">現在の環境でSEO Watchが正常に動作するかを確認できます。エラーや注意がある場合は、表示された案内に従ってください。</p>
+    <div class="diagnostic-grid">
+        <?php foreach ($diagnostics as $check): ?>
+        <div class="diagnostic-row <?=$check['type']?>">
+            <div class="diagnostic-label"><?=View::e($check['label'])?></div>
+            <div class="diagnostic-status <?=View::e($check['type'])?>"><?=View::e($check['status'])?></div>
+            <div class="diagnostic-message"><?=View::e($check['message'])?></div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Cron設定</h2>
+    <p class="hint">以下のコマンド例をコピーして、サーバーのCronに登録してください。PHPのCLIパスは環境によって異なります。</p>
+    <div class="cron-info-grid">
+        <div><strong>Web PHP実行ファイル</strong><p><?=View::e($cliPhpPath)?></p></div>
+        <div><strong>アプリケーションパス</strong><p><?=View::e($appRootPath)?></p></div>
+        <div><strong>推奨Cronコマンド</strong><pre><?=View::e($cronImportCommand)?></pre></div>
+        <div><strong>ラッパー利用例</strong><pre><?=View::e($cronWrapperCommand)?></pre></div>
+        <div><strong>最終データ取得</strong><p><?=View::e($lastRun ? $lastRun['started_at'] . '（' . $lastRun['start_date'] . '〜' . $lastRun['end_date'] . '）' : 'データ取得履歴がありません。')?></p></div>
+    </div>
+    <div class="hint">
+        <p>サーバーによってPHP実行パスが異なるため、SSHや管理画面で <code>command -v php</code> を実行して確認してください。</p>
+        <p>Google OAuthアプリがTesting状態の場合、更新トークンは7日で失効する可能性があります。まず手動取り込みが成功してからCronを登録してください。</p>
+        <p><strong>config/local.php</strong> はWeb公開しないでください。</p>
+    </div>
+</section>
+
 <section class="card full-span">
     <h2>最近の取り込み履歴</h2>
     <div class="table-card flat">

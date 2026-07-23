@@ -1,0 +1,23 @@
+# Ignore cron script if it should not be tracked
+bin/cron.sh
+config/local.php
+
+# Common environment and system files
+.env
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# PHP dependencies
+vendor/
+
+# Logs and caches
+logs/
+cache/
+
+# Release artifacts
+seo-watch-v*-release.zip
+seo-watch-v*-checksums.sha256

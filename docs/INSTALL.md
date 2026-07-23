@@ -6,11 +6,11 @@
 
 - PHP 8.1以上
 - MySQLまたは互換DB
-- `pdo_mysql`, `curl`, `openssl`, `json`, `mbstring`
+- PHP拡張: `pdo_mysql`, `curl`, `openssl`, `json`, `mbstring`
 - HTTPSで公開できるURL
 - Google Search ConsoleへアクセスできるGoogleアカウント
 
-Apache系共有サーバーが最も簡単です。Nginxでは `.htaccess` が使えないため、同等のアクセス拒否設定が必要です。
+SEO WatchはComposerやNode.jsを使わず、PHPとMySQLだけで動作します。Apache系共有サーバーが最も簡単です。Nginxでは `.htaccess` が使えないため、同等のアクセス拒否設定が必要です。
 
 ## 2. データベースを作成する
 
@@ -141,6 +141,14 @@ https://example.com/seo-watch/app/bootstrap.php
 ```
 
 また、HTTPでアクセスした場合にHTTPSへ転送されることを確認してください。
+
+### インストール後の推奨操作
+
+1. SEO Watchへログインします。
+2. 設定画面からGoogleと連携します。
+3. Search Consoleプロパティを選択します。
+4. 初回データを取得します。
+5. Cronによる定期取得を設定します。
 
 CLIを利用できる場合:
 
