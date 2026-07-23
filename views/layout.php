@@ -10,7 +10,7 @@ $loggedIn = isset($auth) && $auth->check();
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title><?=View::e($title ?? '')?> | <?=View::e($appName ?? '10yendama SEO Watch')?></title>
-<link rel="stylesheet" href="assets/app.css?v=0.7.0">
+<link rel="stylesheet" href="assets/app.css?v=0.8.0">
 </head>
 <body>
 <?php if ($loggedIn): ?>
@@ -22,8 +22,10 @@ $loggedIn = isset($auth) && $auth->check();
             <a class="<?=($route ?? '') === 'opportunities' ? 'active' : ''?>" href="index.php?r=opportunities">🚀 伸びしろ</a>
             <a class="<?=($route ?? '') === 'queries' ? 'active' : ''?>" href="index.php?r=queries">🔎 検索語</a>
             <a class="<?=in_array(($route ?? ''), ['pages', 'page-detail'], true) ? 'active' : ''?>" href="index.php?r=pages">📄 ページ</a>
+            <a class="<?=($route ?? '') === 'account' ? 'active' : ''?>" href="index.php?r=account">👤 アカウント</a>
             <?php if (!empty($isSuperuser)): ?>
             <a class="<?=($route ?? '') === 'users' ? 'active' : ''?>" href="index.php?r=users">👥 ユーザー管理</a>
+            <a class="<?=($route ?? '') === 'audit' ? 'active' : ''?>" href="index.php?r=audit">🛡️ 認証監査</a>
             <a class="<?=($route ?? '') === 'settings' ? 'active' : ''?>" href="index.php?r=settings">⚙️ 設定</a>
             <?php endif; ?>
         </nav>
@@ -52,6 +54,6 @@ $loggedIn = isset($auth) && $auth->check();
     <?=$content?>
     <?php require __DIR__ . '/partials/footer.php'; ?>
 <?php endif; ?>
-<script src="assets/app.js?v=0.7.0" defer></script>
+<script src="assets/app.js?v=0.8.0" defer></script>
 </body>
 </html>

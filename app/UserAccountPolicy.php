@@ -7,6 +7,9 @@ final class UserAccountPolicy
 {
     public const ROLE_SUPERUSER = 'superuser';
     public const ROLE_VIEWER = 'viewer';
+    public const STATUS_ACTIVE = 'active';
+    public const STATUS_DISABLED = 'disabled';
+    public const STATUS_INVITED = 'invited';
 
     /** @return list<string> */
     public static function roles(): array
@@ -29,6 +32,16 @@ final class UserAccountPolicy
         return self::isSuperuser($role) ? 'スーパーユーザー' : '閲覧ユーザー';
     }
 
+    public static function statusLabel(string $status): string
+    {
+        return match ($status) {
+            self::STATUS_ACTIVE => '有効',
+            self::STATUS_DISABLED => '無効',
+            self::STATUS_INVITED => '招待中',
+            default => '不明',
+        };
+    }
+
     public static function validateUsername(string $username): ?string
     {
         $length = function_exists('mb_strlen') ? mb_strlen($username, 'UTF-8') : strlen($username);
@@ -43,13 +56,6 @@ final class UserAccountPolicy
 
     public static function validatePassword(string $password): ?string
     {
-        $length = strlen($password);
-        if ($length < 10) {
-            return 'パスワードは10文字以上にしてください。';
-        }
-        if ($length > 4096) {
-            return 'パスワードが長すぎます。';
-        }
-        return null;
+        return PasswordPolicy::validate($password);
     }
 }

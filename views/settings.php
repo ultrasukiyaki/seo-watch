@@ -17,6 +17,22 @@ use Tenyendama\SeoWatch\View;
 </section>
 
 <section class="card">
+    <h2>メール送信状態</h2>
+    <dl class="install-summary">
+        <div><dt>メール送信</dt><dd><?=$mailEnabled ? '有効' : '無効'?></dd></div>
+        <div><dt>送信元名称</dt><dd><?=View::e($mailFromName ?: '未設定')?></dd></div>
+        <div><dt>送信元アドレス</dt><dd><?=View::e($mailFromAddress)?></dd></div>
+        <div><dt>mail()利用可否</dt><dd><?=$mailFunctionAvailable ? '利用可能' : '利用不可'?></dd></div>
+    </dl>
+    <p class="hint"><code>config/local.php</code> の <code>mail</code> 設定を編集してください。Web画面から設定ファイルは変更しません。</p>
+    <form method="post" action="index.php?r=mail/test">
+        <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
+        <label>現在のパスワード<input type="password" name="current_password" autocomplete="current-password" required></label>
+        <button class="button" type="submit" <?=($mailEnabled && $superuserAccount['email_verified_at']) ? '' : 'disabled'?>>確認済みアドレスへテスト送信</button>
+    </form>
+</section>
+
+<section class="card">
     <h2>分析対象プロパティ</h2>
     <?php if (!$properties): ?><p class="muted">Google連携後にプロパティ一覧を取得します。</p><?php else: ?>
     <div class="property-list">
