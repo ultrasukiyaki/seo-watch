@@ -193,6 +193,14 @@ $callbackUrl = rtrim($values['base_url'], '/') . '/oauth-callback.php';
     <?php if ($success): ?>
         <div class="alert success">インストールが完了しました。Google Cloud側のリダイレクトURIが次のURLと完全一致していることを確認してください。</div>
         <pre><?=h($callbackUrl)?></pre>
+        <p>インストール後は以下の手順を順に実行してください。</p>
+        <ol class="install-tasks">
+            <li>SEO Watchへログイン</li>
+            <li>Googleと連携</li>
+            <li>Search Consoleプロパティを選択</li>
+            <li>初回データを取得</li>
+            <li>Cronによる定期取得を設定</li>
+        </ol>
         <p><a class="button primary" href="index.php">管理画面を開く</a></p>
     <?php else: ?>
         <?php if ($errors): ?><div class="alert danger"><strong>入力内容を確認してください。</strong><ul><?php foreach ($errors as $error): ?><li><?=h($error)?></li><?php endforeach; ?></ul></div><?php endif; ?>
@@ -201,6 +209,16 @@ $callbackUrl = rtrim($values['base_url'], '/') . '/oauth-callback.php';
             <div class="requirements">
                 <?php foreach ($requirements as $name => $ok): ?><span class="badge <?=$ok ? 'ok' : 'ng'?>"><?=$ok ? '✓' : '×'?> <?=h($name)?></span><?php endforeach; ?>
             </div>
+        </section>
+        <section class="card">
+            <h2>現在の検出結果</h2>
+            <dl class="install-summary">
+                <div><dt>検出された公開URL</dt><dd><?=h(RuntimeEnvironment::detectedBaseUrl())?></dd></div>
+                <div><dt>OAuthコールバックURL</dt><dd><?=h($callbackUrl)?></dd></div>
+                <div><dt>HTTPS</dt><dd><?=RuntimeEnvironment::requestIsHttps() ? '有効' : '無効'?></dd></div>
+                <div><dt>configディレクトリ書き込み</dt><dd><?=is_writable(dirname($configPath)) ? '可能' : '不可'?></dd></div>
+            </dl>
+            <p class="hint">インストール中に<code>config/local.php</code>が書き込める必要があります。権限がない場合はFTP/ホスティング管理画面で確認してください。</p>
         </section>
         <section class="card">
             <h2>Google Cloudへ登録するURI</h2>
@@ -236,6 +254,7 @@ $callbackUrl = rtrim($values['base_url'], '/') . '/oauth-callback.php';
             <div class="wide"><button class="button primary" type="submit">インストール実行</button></div>
         </form>
     <?php endif; ?>
+    <?php require __DIR__ . '/views/partials/footer.php'; ?>
 </main>
 </body>
 </html>

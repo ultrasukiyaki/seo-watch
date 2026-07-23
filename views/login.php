@@ -13,4 +13,5 @@ use Tenyendama\SeoWatch\View;
         <label>パスワード<input type="password" name="password" autocomplete="current-password" required></label>
         <button class="button primary wide-button" type="submit">ログイン</button>
     </form>
+    <?php require __DIR__ . '/partials/footer.php'; ?>
 </main>

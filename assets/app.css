@@ -16,3 +16,18 @@
 /* v0.5.0 role based access control */
 .signed-in-user{display:grid;gap:3px;padding:10px;border:1px solid rgba(255,255,255,.09);border-radius:10px;background:#17243c}.signed-in-user strong{font-size:.82rem;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.signed-in-user span{font-size:.67rem;color:#9fb0cc}.user-management-grid{display:grid;grid-template-columns:minmax(300px,.75fr) minmax(360px,1.25fr);gap:20px}.user-management-grid .full-span{grid-column:1/-1}.stack-form{display:grid;gap:15px}.permission-list{display:grid;gap:0;margin:15px 0}.permission-list>div{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:12px 0;border-bottom:1px solid var(--line)}.permission-list>div:last-child{border-bottom:0}.permission-list dt{color:var(--muted)}.permission-list dd{margin:0;font-weight:800;text-align:right}.compact-notice{margin-top:14px}.users-table{min-width:800px}.role-badge,.current-user-mark{display:inline-flex;align-items:center;border-radius:999px;font-size:.68rem;font-weight:800;white-space:nowrap}.role-badge{padding:5px 9px}.role-badge.superuser{background:#fff1c9;color:#815b00}.role-badge.viewer{background:#eaf0ff;color:#3157c8}.current-user-mark{margin-left:8px;padding:3px 7px;background:#e8f7ef;color:#147a4a}.user-policy-card{align-self:start}
 @media(max-width:1000px){.user-management-grid{grid-template-columns:1fr}.user-management-grid .full-span{grid-column:auto}}
+.app-footer{padding:18px 30px;background:#f9fbff;color:#6f7b91;border-top:1px solid #e6edf5}
+.app-footer p{margin:0;font-size:.95rem}
+.app-footer a{color:var(--primary)}
+.diagnostic-grid{display:grid;gap:12px}
+.diagnostic-row{display:grid;gap:8px;padding:18px;border-radius:14px;border:1px solid var(--line)}
+.diagnostic-row.ok{background:#f5fbf5}
+.diagnostic-row.warning{background:#fffbef}
+.diagnostic-row.error{background:#fff2f2}
+.diagnostic-label{font-weight:700}
+.diagnostic-status{font-size:.95rem}
+.diagnostic-message{color:var(--muted)}
+.cron-info-grid{display:grid;gap:16px}
+.cron-info-grid div{display:grid;gap:6px}
+.cron-info-grid pre{background:#f5f7ff;border:1px solid #dce4f4;border-radius:12px;padding:12px;overflow:auto}
+@media(max-width:900px){.cron-info-grid{grid-template-columns:1fr}.diagnostic-grid{grid-template-columns:1fr}}
