@@ -16,6 +16,16 @@ final class SchemaManager
         $this->migrateSettings();
         $this->migrateUsers();
         $this->migrateAuthentication();
+        $this->migrateMigrationState();
+        if ($this->startMigration('20260724_001_v010', hash('sha256', 'seo-watch-v0.10.0-schema'))) {
+            try {
+                $this->migrateV010();
+                $this->finishMigration('20260724_001_v010', 'applied', null);
+            } catch (\Throwable $e) {
+                $this->finishMigration('20260724_001_v010', 'failed', 'DBスキーマ更新に失敗しました。');
+                throw $e;
+            }
+        }
 
         $this->ensureColumn(
             'search_performance',
@@ -73,6 +83,172 @@ SQL);
             'content_fetched_at',
             'ALTER TABLE page_metadata ADD COLUMN content_fetched_at DATETIME NULL AFTER content_status'
         );
+    }
+
+    private function migrateMigrationState(): void
+    {
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    migration_id VARCHAR(190) NOT NULL PRIMARY KEY,
+    checksum CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    started_at DATETIME NULL,
+    applied_at DATETIME NULL,
+    status VARCHAR(20) NOT NULL,
+    error_summary VARCHAR(500) NULL,
+    app_version VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        $stmt = $this->pdo->prepare(
+            'INSERT IGNORE INTO schema_migrations
+             (migration_id, checksum, started_at, applied_at, status, app_version)
+             VALUES ("baseline_v0.9.0", :checksum, UTC_TIMESTAMP(), UTC_TIMESTAMP(), "applied", "0.9.0")'
+        );
+        $stmt->execute(['checksum' => hash('sha256', 'seo-watch-v0.9.0-baseline')]);
+    }
+
+    private function startMigration(string $id, string $checksum): bool
+    {
+        $lock = (int)$this->pdo->query("SELECT GET_LOCK('seo_watch_schema_migration', 0)")->fetchColumn();
+        if ($lock !== 1) {
+            throw new \RuntimeException('別のマイグレーション処理が実行中です。');
+        }
+        $stmt = $this->pdo->prepare('SELECT checksum, status FROM schema_migrations WHERE migration_id = :id');
+        $stmt->execute(['id' => $id]);
+        $existing = $stmt->fetch();
+        if ($existing) {
+            if (!hash_equals((string)$existing['checksum'], $checksum)) {
+                $this->releaseMigrationLock();
+                throw new \RuntimeException('適用済みマイグレーションのchecksumが一致しません。');
+            }
+            if ($existing['status'] === 'applied') {
+                $this->releaseMigrationLock();
+                return false;
+            }
+            if ($existing['status'] === 'running') {
+                $this->releaseMigrationLock();
+                throw new \RuntimeException('別のマイグレーション処理が実行中です。');
+            }
+        }
+        $upsert = $this->pdo->prepare(
+            'INSERT INTO schema_migrations
+             (migration_id, checksum, started_at, applied_at, status, error_summary, app_version)
+             VALUES (:id, :checksum, UTC_TIMESTAMP(), NULL, "running", NULL, "0.10.0")
+             ON DUPLICATE KEY UPDATE started_at = UTC_TIMESTAMP(), applied_at = NULL,
+             status = "running", error_summary = NULL, app_version = "0.10.0"'
+        );
+        $upsert->execute(['id' => $id, 'checksum' => $checksum]);
+        return true;
+    }
+
+    private function finishMigration(string $id, string $status, ?string $error): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE schema_migrations SET status = :status,
+             applied_at = CASE WHEN :applied_status = "applied" THEN UTC_TIMESTAMP() ELSE NULL END,
+             error_summary = :error WHERE migration_id = :id'
+        );
+        $stmt->execute(['status' => $status, 'applied_status' => $status, 'error' => $error, 'id' => $id]);
+        $this->releaseMigrationLock();
+    }
+
+    private function releaseMigrationLock(): void
+    {
+        $this->pdo->query("SELECT RELEASE_LOCK('seo_watch_schema_migration')");
+    }
+
+    private function migrateV010(): void
+    {
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS import_runs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    property_id BIGINT UNSIGNED NOT NULL,
+    source VARCHAR(16) NOT NULL DEFAULT 'web',
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME NULL,
+    heartbeat_at DATETIME NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'running',
+    rows_imported BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    rows_fetched BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    rows_skipped BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    error_category VARCHAR(20) NULL,
+    correlation_id CHAR(32) NULL,
+    user_id BIGINT UNSIGNED NULL,
+    message TEXT NULL,
+    CONSTRAINT fk_import_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    KEY idx_import_property_started (property_id, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS improvement_tasks (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    property_id BIGINT UNSIGNED NOT NULL,
+    normalized_page_hash BINARY(32) NOT NULL,
+    normalized_page_url TEXT NOT NULL,
+    task_type VARCHAR(32) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    source_query TEXT NULL,
+    source_score DECIMAL(12,2) NULL,
+    suggestion_hash BINARY(32) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'open',
+    note TEXT NULL,
+    assigned_user_id BIGINT UNSIGNED NULL,
+    revision_date DATE NULL,
+    started_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by_user_id BIGINT UNSIGNED NOT NULL,
+    updated_by_user_id BIGINT UNSIGNED NOT NULL,
+    UNIQUE KEY uq_improvement_suggestion (property_id, normalized_page_hash, task_type, suggestion_hash),
+    KEY idx_improvement_property_status (property_id, status, updated_at),
+    KEY idx_improvement_assignee (assigned_user_id),
+    CONSTRAINT fk_improvement_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    CONSTRAINT fk_improvement_assignee FOREIGN KEY (assigned_user_id) REFERENCES admins(id) ON DELETE SET NULL,
+    CONSTRAINT fk_improvement_creator FOREIGN KEY (created_by_user_id) REFERENCES admins(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_improvement_updater FOREIGN KEY (updated_by_user_id) REFERENCES admins(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS improvement_history (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT UNSIGNED NOT NULL,
+    event_type VARCHAR(32) NOT NULL,
+    before_json TEXT NULL,
+    after_json TEXT NULL,
+    actor_user_id BIGINT UNSIGNED NULL,
+    metadata_json TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_improvement_history_task (task_id, created_at),
+    CONSTRAINT fk_improvement_history_task FOREIGN KEY (task_id) REFERENCES improvement_tasks(id) ON DELETE CASCADE,
+    CONSTRAINT fk_improvement_history_actor FOREIGN KEY (actor_user_id) REFERENCES admins(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS import_locks (
+    property_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    owner_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    source VARCHAR(16) NOT NULL,
+    acquired_at DATETIME NOT NULL,
+    heartbeat_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    CONSTRAINT fk_import_lock_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    KEY idx_import_lock_expiry (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        foreach ([
+            ['source', "ALTER TABLE import_runs ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'web' AFTER property_id"],
+            ['heartbeat_at', 'ALTER TABLE import_runs ADD COLUMN heartbeat_at DATETIME NULL AFTER finished_at'],
+            ['rows_fetched', 'ALTER TABLE import_runs ADD COLUMN rows_fetched BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER rows_imported'],
+            ['rows_skipped', 'ALTER TABLE import_runs ADD COLUMN rows_skipped BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER rows_fetched'],
+            ['error_category', 'ALTER TABLE import_runs ADD COLUMN error_category VARCHAR(20) NULL AFTER rows_skipped'],
+            ['correlation_id', 'ALTER TABLE import_runs ADD COLUMN correlation_id CHAR(32) NULL AFTER error_category'],
+            ['user_id', 'ALTER TABLE import_runs ADD COLUMN user_id BIGINT UNSIGNED NULL AFTER correlation_id'],
+        ] as [$column, $sql]) {
+            $this->ensureColumn('import_runs', $column, $sql);
+        }
     }
 
     private function migrateSettings(): void

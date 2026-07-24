@@ -309,7 +309,8 @@ try {
         $days = max(1, min(90, (int)($_POST['days'] ?? 7)));
         $lag = max(1, min(7, (int)$config->get('app.import_lag_days', 3)));
         $range = $searchConsoleDate->importRange($days, $lag);
-        $rows = $importer->import($active, $range['start'], $range['end']);
+        $actor = $auth->user();
+        $rows = $importer->import($active, $range['start'], $range['end'], 'web', 'web', (int)$actor['id']);
         flash('success', number_format($rows) . "行を取り込みました（{$range['start']}〜{$range['end']}、Search Console基準日 PT）。URL正規化も反映済みです。");
         redirectTo('dashboard');
     }
@@ -516,6 +517,54 @@ try {
         'isSuperuser' => $isSuperuser,
         'dateTime' => $dateTime,
     ];
+
+    if ($route === 'improvements/create') {
+        postOnly();
+        if (!$activeProperty) {
+            throw new RuntimeException('先に分析対象プロパティを選んでください。');
+        }
+        $input = $_POST;
+        $input['property_id'] = (int)$activeProperty['id'];
+        $improvementTasks->create($input, (int)$currentUser['id']);
+        flash('success', '改善タスクを追加しました。');
+        redirectTo('improvements');
+    }
+
+    if ($route === 'improvements/update') {
+        postOnly();
+        if (!$activeProperty) {
+            throw new RuntimeException('先に分析対象プロパティを選んでください。');
+        }
+        $improvementTasks->update(
+            (int)($_POST['task_id'] ?? 0),
+            (int)$activeProperty['id'],
+            $_POST,
+            (int)$currentUser['id']
+        );
+        flash('success', '改善タスクを更新しました。');
+        redirectTo('improvements');
+    }
+
+    if ($route === 'improvements') {
+        $filters = ['status' => trim((string)($_GET['status'] ?? ''))];
+        $tasks = $activeProperty ? $improvementTasks->list((int)$activeProperty['id'], $filters) : [];
+        if ($activeProperty) {
+            foreach ($tasks as &$task) {
+                $task['history'] = array_slice($improvementTasks->historyFor((int)$task['id'], (int)$activeProperty['id']), 0, 5);
+                $task['comparison'] = !empty($task['revision_date'])
+                    ? $effectComparison->compare((int)$activeProperty['id'], (string)$task['normalized_page_url'], (string)$task['revision_date'])
+                    : null;
+            }
+            unset($task);
+        }
+        View::render('improvements', $common + [
+            'title' => '改善管理',
+            'tasks' => $tasks,
+            'filters' => $filters,
+            'users' => $isSuperuser ? $userRepo->all() : [],
+        ]);
+        exit;
+    }
 
     if ($route === 'dashboard') {
         $summary = $activeProperty ? $analytics->summary((int)$activeProperty['id']) : null;

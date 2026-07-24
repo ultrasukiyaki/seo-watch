@@ -27,6 +27,8 @@ final class RoutePolicy
         'properties/activate',
         'import/run',
         'maintenance/normalize',
+        'improvements/create',
+        'improvements/update',
     ];
 
     public static function requiresSuperuser(string $route): bool

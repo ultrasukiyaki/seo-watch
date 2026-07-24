@@ -33,6 +33,9 @@ use Tenyendama\SeoWatch\DateTimeFormatter;
 use Tenyendama\SeoWatch\SearchConsoleDate;
 use Tenyendama\SeoWatch\SystemClock;
 use Tenyendama\SeoWatch\TimezoneService;
+use Tenyendama\SeoWatch\ImportLockService;
+use Tenyendama\SeoWatch\ImprovementTaskRepository;
+use Tenyendama\SeoWatch\EffectComparisonService;
 
 require_once __DIR__ . '/autoload.php';
 
@@ -85,7 +88,10 @@ $oauthState = new OAuthState($config);
 $api = new SearchConsoleApi($http, $oauth);
 $propertyRepo = new PropertyRepository($pdo);
 $urlNormalizer = new UrlNormalizer();
-$importer = new Importer($pdo, $api, $urlNormalizer);
+$importLocks = new ImportLockService($pdo);
+$importer = new Importer($pdo, $api, $urlNormalizer, $importLocks);
+$improvementTasks = new ImprovementTaskRepository($pdo, $urlNormalizer);
+$effectComparison = new EffectComparisonService($pdo);
 $analytics = new AnalyticsRepository($pdo, new OpportunityScorer());
 $dataMaintenance = new DataMaintenance($pdo, $urlNormalizer);
 $pageMetadata = new PageMetadataRepository($pdo);
@@ -137,6 +143,9 @@ return compact(
     'accountRecovery',
     'settings',
     'clock',
+    'importLocks',
+    'improvementTasks',
+    'effectComparison',
     'dateTime',
     'searchConsoleDate',
     'displayTimezoneConfirmed'
