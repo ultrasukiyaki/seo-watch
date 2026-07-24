@@ -10,6 +10,8 @@ use Tenyendama\SeoWatch\DateTimeFormatter;
 use Tenyendama\SeoWatch\FrozenClock;
 use Tenyendama\SeoWatch\SearchConsoleDate;
 use Tenyendama\SeoWatch\TimezoneService;
+use Tenyendama\SeoWatch\MailFormatter;
+use Tenyendama\SeoWatch\MailMessage;
 
 require_once dirname(__DIR__) . '/app/autoload.php';
 
@@ -54,6 +56,37 @@ $test('mailer rejects CRLF from name', function () use ($assert): void {
         $assert(true);
     }
 });
+$test('mail message and headers are safe UTF-8 MIME', function () use ($assert): void {
+    $message = new MailMessage('User@Example.COM', '日本語の件名', ".first\n.second");
+    $raw = MailFormatter::format($message, [
+        'from_address' => 'noreply@example.com',
+        'from_name' => 'SEO ウォッチ',
+        'reply_to' => 'support@example.com',
+    ]);
+    $assert($message->to === 'user@example.com');
+    foreach (['Date:', 'Message-ID:', 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8'] as $header) {
+        $assert(str_contains($raw, $header), $header);
+    }
+    $assert(str_contains($raw, '=?UTF-8?'));
+    try {
+        new MailMessage('user@example.com', "subject\r\nBcc: bad@example.com", 'body');
+        $assert(false);
+    } catch (InvalidArgumentException) {
+        $assert(true);
+    }
+});
+$test('mail settings routes require superuser', function () use ($assert): void {
+    foreach (['mail/settings', 'mail/connection-test', 'mail/test'] as $route) {
+        $assert(RoutePolicy::requiresSuperuser($route), $route);
+    }
+});
+$test('smtp password uses application AES-256-GCM crypto', function () use ($assert): void {
+    $source = file_get_contents(dirname(__DIR__) . '/app/MailSettingsRepository.php');
+    $crypto = file_get_contents(dirname(__DIR__) . '/app/Crypto.php');
+    $assert(is_string($source) && str_contains($source, '$this->crypto->encrypt'));
+    $assert(is_string($source) && !str_contains($source, 'smtp_password_plaintext'));
+    $assert(is_string($crypto) && str_contains($crypto, "'aes-256-gcm'"));
+});
 $test('viewer cannot access audit route', function () use ($assert): void {
     $assert(RoutePolicy::requiresSuperuser('audit'));
     $assert(!RoutePolicy::requiresSuperuser('account'));
@@ -67,6 +100,10 @@ $test('trusted base URL is used', function () use ($assert): void {
     $source = file_get_contents(dirname(__DIR__) . '/app/AccountRecoveryService.php');
     $assert(is_string($source) && str_contains($source, '$this->baseUrl'));
     $assert(is_string($source) && !str_contains($source, 'HTTP_HOST'));
+});
+$test('password reset only uses verified email', function () use ($assert): void {
+    $source = file_get_contents(dirname(__DIR__) . '/app/AccountRecoveryService.php');
+    $assert(is_string($source) && substr_count($source, 'email_verified_at IS NOT NULL') >= 2);
 });
 $test('reset pages use protective headers', function () use ($assert): void {
     $source = file_get_contents(dirname(__DIR__) . '/index.php');

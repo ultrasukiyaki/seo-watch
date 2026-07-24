@@ -38,14 +38,48 @@ use Tenyendama\SeoWatch\View;
 </section>
 
 <section class="card">
-    <h2>メール送信状態</h2>
+    <h2>メール配送</h2>
     <dl class="install-summary">
-        <div><dt>メール送信</dt><dd><?=$mailEnabled ? '有効' : '無効'?></dd></div>
+        <div><dt>メール機能</dt><dd><?=View::e(['disabled'=>'未設定','php_mail'=>'PHP mail()','smtp'=>'SMTP'][$mailSettings['transport']] ?? '未設定')?></dd></div>
         <div><dt>送信元名称</dt><dd><?=View::e($mailFromName ?: '未設定')?></dd></div>
         <div><dt>送信元アドレス</dt><dd><?=View::e($mailFromAddress)?></dd></div>
-        <div><dt>mail()利用可否</dt><dd><?=$mailFunctionAvailable ? '利用可能' : '利用不可'?></dd></div>
+        <div><dt>PHP mail()</dt><dd><?=$mailFunctionAvailable ? '利用可能（受付結果であり到達保証ではありません）' : '利用不可'?></dd></div>
+        <div><dt>SMTP</dt><dd><?=View::e($mailSettings['smtp_host'] ? $mailSettings['smtp_host'] . ':' . $mailSettings['smtp_port'] : '未設定')?></dd></div>
+        <div><dt>SMTPパスワード</dt><dd><?=empty($mailSettings['smtp_password_ciphertext']) ? '未設定' : '設定済み'?></dd></div>
+        <div><dt>最終接続テスト</dt><dd><?=View::e(($mailSettings['last_connection_test_status'] ?? '未実施') . ' ' . ($mailSettings['last_connection_test_at'] ?? ''))?></dd></div>
+        <div><dt>最終テストメール</dt><dd><?=View::e(($mailSettings['last_test_mail_status'] ?? '未実施') . ' ' . ($mailSettings['last_test_mail_at'] ?? ''))?></dd></div>
     </dl>
-    <p class="hint"><code>config/local.php</code> の <code>mail</code> 設定を編集してください。Web画面から設定ファイルは変更しません。</p>
+    <form method="post" action="index.php?r=mail/settings">
+        <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
+        <label>配送方式<select name="transport">
+            <option value="disabled" <?=$mailSettings['transport']==='disabled'?'selected':''?>>使用しない</option>
+            <option value="php_mail" <?=$mailSettings['transport']==='php_mail'?'selected':''?>>PHP mail()</option>
+            <option value="smtp" <?=$mailSettings['transport']==='smtp'?'selected':''?>>SMTP</option>
+        </select></label>
+        <label>送信元名称<input name="from_name" value="<?=View::e($mailSettings['from_name'])?>"></label>
+        <label>Fromアドレス<input type="email" name="from_address" value="<?=View::e($mailSettings['from_address'])?>"></label>
+        <label>Reply-To（任意）<input type="email" name="reply_to" value="<?=View::e($mailSettings['reply_to'])?>"></label>
+        <label>Envelope-From（任意）<input type="email" name="envelope_from" value="<?=View::e($mailSettings['envelope_from'])?>"></label>
+        <label>SMTPホスト<input name="smtp_host" value="<?=View::e($mailSettings['smtp_host'])?>"></label>
+        <label>ポート<input type="number" name="smtp_port" min="1" max="65535" value="<?=(int)$mailSettings['smtp_port']?>"></label>
+        <label>暗号化<select name="smtp_encryption">
+            <option value="starttls" <?=$mailSettings['smtp_encryption']==='starttls'?'selected':''?>>STARTTLS</option>
+            <option value="tls" <?=$mailSettings['smtp_encryption']==='tls'?'selected':''?>>TLS接続</option>
+            <option value="none" <?=$mailSettings['smtp_encryption']==='none'?'selected':''?>>暗号化なし</option>
+        </select></label>
+        <label><input type="checkbox" name="smtp_auth_enabled" value="1" <?=!empty($mailSettings['smtp_auth_enabled'])?'checked':''?>> SMTP認証を使用</label>
+        <label>SMTPユーザー名<input name="smtp_username" autocomplete="off" value="<?=View::e($mailSettings['smtp_username'])?>"></label>
+        <label>SMTPパスワード<input type="password" name="smtp_password" autocomplete="new-password" placeholder="••••••••••••"></label>
+        <p class="hint">空欄の場合は現在値を維持します。</p>
+        <label><input type="checkbox" name="smtp_password_delete" value="1"> 現在のSMTPパスワードを削除</label>
+        <label>接続タイムアウト（秒）<input type="number" name="smtp_timeout" min="1" max="60" value="<?=(int)$mailSettings['smtp_timeout']?>"></label>
+        <button class="button primary" type="submit">メール設定を保存</button>
+    </form>
+    <p class="hint">実際のSPF・DKIM・DMARC合否は、SMTPサーバーとDNS設定によって決まります。SEO Watchは配送認証の合格を保証しません。PHP mail()よりSMTPを推奨します。</p>
+    <form method="post" action="index.php?r=mail/connection-test">
+        <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
+        <button class="button" type="submit" <?=$mailSettings['transport']==='smtp'?'':'disabled'?>>SMTP接続テスト（メール送信なし）</button>
+    </form>
     <form method="post" action="index.php?r=mail/test">
         <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
         <label>現在のパスワード<input type="password" name="current_password" autocomplete="current-password" required></label>

@@ -27,10 +27,6 @@ return [
         'client_secret' => 'GOOGLE_OAUTH_CLIENT_SECRET',
         'redirect_uri' => 'https://example.com/seo-watch/oauth-callback.php',
     ],
-    'mail' => [
-        // PHPのmail()を利用します。設定確認まではfalseのままにしてください。
-        'enabled' => false,
-        'from_address' => 'no-reply@example.com',
-        'from_name' => '10yendama SEO Watch',
-    ],
+    // メール配送設定はインストーラーまたは設定画面からDBへ保存します。
+    // SMTPパスワードはapp.keyを使用したAES-256-GCM暗号文として保存されます。
 ];

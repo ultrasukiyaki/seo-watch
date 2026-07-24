@@ -11,7 +11,8 @@ use Tenyendama\SeoWatch\View;
         <div><dt>ユーザー名</dt><dd><?=View::e($account['username'])?></dd></div>
         <div><dt>ロール</dt><dd><?=View::e(UserAccountPolicy::roleLabel((string)$account['role']))?></dd></div>
         <div><dt>状態</dt><dd><?=View::e(UserAccountPolicy::statusLabel((string)$account['account_status']))?></dd></div>
-        <div><dt>メール</dt><dd><?=View::e(EmailAddress::mask($account['email']))?></dd></div>
+        <div><dt>メール</dt><dd><?=View::e(EmailAddress::mask($account['email']) ?: '未設定')?></dd></div>
+        <?php if ($account['pending_email']): ?><div><dt>変更待ち</dt><dd><?=View::e($account['pending_email'])?></dd></div><?php endif; ?>
         <div><dt>メール確認</dt><dd><?=$account['email_verified_at'] ? $dateTime->time($account['email_verified_at']) : '未確認'?></dd></div>
         <div><dt>最終ログイン</dt><dd><?=$dateTime->time($account['last_login_at'] ?? null)?></dd></div>
         <div><dt>パスワード変更</dt><dd><?=$dateTime->time($account['password_changed_at'] ?? null)?></dd></div>
@@ -23,14 +24,23 @@ use Tenyendama\SeoWatch\View;
     <?php endif; ?>
 </section>
 <section class="card">
-    <h2>メールアドレス変更</h2>
-    <?php if (!$mailEnabled): ?><div class="alert warning">メール送信が無効のため変更を開始できません。<code>config/local.php</code>を設定してください。</div><?php endif; ?>
+    <h2><?=$account['email'] ? 'メールアドレス変更' : 'メールアドレスを追加'?></h2>
+    <?php if (!$mailEnabled): ?><div class="alert warning">メール配送が未設定のため、確認待ちとして保存します。配送設定後に確認メールを送信してください。</div><?php endif; ?>
+    <?php if ($account['pending_email']): ?>
+    <p>メールアドレス: 確認待ち<br><strong><?=View::e($account['pending_email'])?></strong></p>
+    <div class="button-row">
+      <?php if ($mailEnabled): ?><form method="post" action="index.php?r=account/email-send"><input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>"><button class="button" type="submit">確認メールを再送</button></form><?php endif; ?>
+      <form method="post" action="index.php?r=account/email-cancel"><input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>"><button class="button danger-button" type="submit">登録を取り消す</button></form>
+      <?php if (!$mailEnabled && $isSuperuser): ?><a class="button" href="index.php?r=settings">メール設定を開く</a><?php endif; ?>
+    </div>
+    <?php else: ?>
     <form method="post" action="index.php?r=account/email">
         <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
         <label>現在のパスワード<input type="password" name="current_password" autocomplete="current-password" required></label>
         <label>新しいメールアドレス<input type="email" name="email" autocomplete="email" required></label>
-        <button class="button primary" type="submit" <?=$mailEnabled ? '' : 'disabled'?>>確認メールを送信</button>
+        <button class="button primary" type="submit"><?=$mailEnabled ? '確認メールを送信' : '確認待ちとして保存'?></button>
     </form>
+    <?php endif; ?>
 </section>
 <section class="card">
     <h2>パスワード変更</h2>

@@ -25,8 +25,9 @@ use Tenyendama\SeoWatch\WordPressContentInspector;
 use Tenyendama\SeoWatch\AccountRecoveryService;
 use Tenyendama\SeoWatch\AuthenticationAuditLogger;
 use Tenyendama\SeoWatch\AuthRateLimiter;
-use Tenyendama\SeoWatch\DisabledMailer;
-use Tenyendama\SeoWatch\PhpMailMailer;
+use Tenyendama\SeoWatch\MailService;
+use Tenyendama\SeoWatch\MailSettingsRepository;
+use Tenyendama\SeoWatch\MailTransportFactory;
 use Tenyendama\SeoWatch\UserActionTokenRepository;
 use Tenyendama\SeoWatch\AppSettings;
 use Tenyendama\SeoWatch\DateTimeFormatter;
@@ -100,13 +101,10 @@ $contentInspector = new WordPressContentInspector($config, $http, $pageMetadata,
 $improvementAdvisor = new ImprovementAdvisor();
 $audit = new AuthenticationAuditLogger($pdo, (string)$config->get('app.key'), $dateTime);
 $rateLimiter = new AuthRateLimiter($pdo, (string)$config->get('app.key'));
-$mailer = new DisabledMailer();
-if ((bool)$config->get('mail.enabled', false)) {
-    $mailer = new PhpMailMailer(
-        (string)$config->get('mail.from_address', ''),
-        (string)$config->get('mail.from_name', $config->get('app.name'))
-    );
-}
+$mailSettings = new MailSettingsRepository($pdo, $crypto);
+$mailSettingsData = $mailSettings->get();
+$mailTransportFactory = new MailTransportFactory($mailSettings);
+$mailer = new MailService((string)$mailSettingsData['transport'], $mailTransportFactory->create($mailSettingsData));
 $actionTokens = new UserActionTokenRepository($pdo, $clock);
 $accountRecovery = new AccountRecoveryService(
     $pdo,
@@ -139,6 +137,9 @@ return compact(
     'audit',
     'rateLimiter',
     'mailer',
+    'mailSettings',
+    'mailSettingsData',
+    'mailTransportFactory',
     'actionTokens',
     'accountRecovery',
     'settings',

@@ -25,7 +25,7 @@ final class AccountRecoveryService
         $stmt = $this->pdo->prepare(
             "SELECT id, email FROM admins
              WHERE (LOWER(username) = :identifier OR email = :identifier)
-               AND account_status = 'active' LIMIT 1"
+               AND account_status = 'active' AND email_verified_at IS NOT NULL LIMIT 1"
         );
         $stmt->execute(['identifier' => $normalized]);
         $user = $stmt->fetch();
@@ -103,7 +103,10 @@ final class AccountRecoveryService
 
     public function sendResetForUser(int $userId, int $actorId): bool
     {
-        $stmt = $this->pdo->prepare("SELECT email FROM admins WHERE id = :id AND role = 'viewer' AND account_status = 'active'");
+        $stmt = $this->pdo->prepare(
+            "SELECT email FROM admins WHERE id = :id AND role = 'viewer'
+             AND account_status = 'active' AND email_verified_at IS NOT NULL"
+        );
         $stmt->execute(['id' => $userId]);
         $email = $stmt->fetchColumn();
         if (!$email || !$this->mailer->enabled()) {
@@ -166,9 +169,6 @@ final class AccountRecoveryService
 
     public function requestEmailChange(int $userId, string $currentPassword, string $newEmail): void
     {
-        if (!$this->mailer->enabled()) {
-            throw new RuntimeException('メール送信が無効のため、メールアドレス変更を開始できません。');
-        }
         $newEmail = EmailAddress::normalize($newEmail);
         $duplicate = $this->pdo->prepare(
             'SELECT 1 FROM admins WHERE id <> :id AND (email = :email OR pending_email = :email) LIMIT 1'
@@ -189,6 +189,21 @@ final class AccountRecoveryService
         } catch (\PDOException $e) {
             throw new RuntimeException('そのメールアドレスはすでに使用されています。', 0, $e);
         }
+        $this->audit->log('email_added_pending', 'success', $userId, $userId);
+        if (!$this->mailer->enabled()) {
+            return;
+        }
+        $this->sendEmailVerification($userId);
+    }
+
+    public function sendEmailVerification(int $userId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT pending_email FROM admins WHERE id=:id');
+        $stmt->execute(['id' => $userId]);
+        $newEmail = (string)$stmt->fetchColumn();
+        if ($newEmail === '' || !$this->mailer->enabled()) {
+            return false;
+        }
         $issued = $this->tokens->issue($userId, UserActionTokenRepository::EMAIL_VERIFICATION, 1800, $newEmail, $userId);
         $sent = $this->mailer->send(
             $newEmail,
@@ -197,9 +212,18 @@ final class AccountRecoveryService
             "\n\n有効期限: " . $this->formatExpiry($issued['expires_at']) . "\nこのURLは一度だけ利用できます。"
         );
         if (!$sent) {
-            throw new RuntimeException('確認メールを送信できませんでした。設定を確認して再度お試しください。');
+            $this->audit->log('email_verification_failed', 'send_failed', $userId, $userId);
+            return false;
         }
-        $this->audit->log('email_change_requested', 'success', $userId, $userId);
+        $this->audit->log('email_verification_sent', 'success', $userId, $userId);
+        return true;
+    }
+
+    public function cancelPendingEmail(int $userId): void
+    {
+        $this->pdo->prepare('UPDATE admins SET pending_email=NULL WHERE id=:id')->execute(['id' => $userId]);
+        $this->tokens->invalidateForUser($userId, UserActionTokenRepository::EMAIL_VERIFICATION);
+        $this->audit->log('email_pending_cancelled', 'success', $userId, $userId);
     }
 
     public function verifyEmail(string $token): bool

@@ -9,6 +9,8 @@ final class RoutePolicy
     private const SUPERUSER_ROUTES = [
         'settings',
         'settings/timezone',
+        'mail/settings',
+        'mail/connection-test',
         'users',
         'users/create',
         'users/delete',

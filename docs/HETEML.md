@@ -90,3 +90,6 @@ php bin/maintenance.php --dry-run
 ```
 
 maintenanceはSearch Console分析データや改善タスクを削除しません。`--execute` はdry-runの件数を確認してから指定してください。
+## SMTPメール
+
+利用するメールサーバーのホスト、ポート、暗号化方式、認証情報をhetemlの案内に従って設定画面へ入力し、まず「SMTP接続テスト」を実行してください。PHP mail()の成功は到達保証ではないためSMTPを推奨します。
