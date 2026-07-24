@@ -159,6 +159,28 @@ SQL);
     private function migrateV010(): void
     {
         $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS import_runs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    property_id BIGINT UNSIGNED NOT NULL,
+    source VARCHAR(16) NOT NULL DEFAULT 'web',
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME NULL,
+    heartbeat_at DATETIME NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'running',
+    rows_imported BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    rows_fetched BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    rows_skipped BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    error_category VARCHAR(20) NULL,
+    correlation_id CHAR(32) NULL,
+    user_id BIGINT UNSIGNED NULL,
+    message TEXT NULL,
+    CONSTRAINT fk_import_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    KEY idx_import_property_started (property_id, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        $this->pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS improvement_tasks (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     property_id BIGINT UNSIGNED NOT NULL,
