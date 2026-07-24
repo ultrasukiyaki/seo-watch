@@ -1,5 +1,7 @@
 # Google OAuth / Search Console API 設定手順
 
+> v0.10系では取得処理にプロパティ単位のDB leaseが追加されています。Web、CLI、Cronから同じプロパティを同時取得した場合、後から開始した処理は安全に中止されます。OAuthスコープとSearch Console APIの設定方法は従来から変更ありません。
+
 **対象:** 10yendama SEO Watch  
 **最終更新:** 2026-07-22
 
@@ -562,6 +564,13 @@ Google Cloud ConsoleのOAuthクライアント画面で、シークレットの�
 
 ## 17. 最終チェックリスト
 
+v0.10系では、Google連携後に次も確認してください。
+
+- 手動取得中に同じプロパティのCLI取得を開始すると多重実行メッセージになる
+- 失敗時にアクセストークン、更新トークン、Google APIレスポンス全文が画面へ出ない
+- 設定画面の同期履歴で実行状態と安全なメッセージを確認できる
+- stale leaseは `php bin/maintenance.php --dry-run --target=import-locks` で予定件数だけ確認できる
+
 Google Cloud側:
 
 - [ ] SEO Watch用プロジェクトを作成した
@@ -625,4 +634,3 @@ Search Consoleプロパティを選択
 - [WebサーバーアプリケーションでOAuth 2.0を使用する](https://developers.google.com/identity/protocols/oauth2/web-server)
 - [Search Console APIのリクエストを認可する](https://developers.google.com/webmaster-tools/v1/how-tos/authorizing)
 - [OAuthアプリの確認](https://support.google.com/cloud/answer/13463073)
-

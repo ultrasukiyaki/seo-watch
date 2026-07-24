@@ -74,6 +74,19 @@ https://example.com/seo-watch/oauth-callback.php
 ```
 
 `/public`や末尾スラッシュを追加しないでください。
-# hetemlでのタイムゾーン
+## hetemlでのタイムゾーン
 
 PHPの標準タイムゾーンにかかわらず、SEO Watchの内部処理とMySQL接続セッションはUTC、利用者向け表示は管理画面で選んだIANAタイムゾーンを使用します。CronのSearch Console対象日はPT基準です。
+
+## v0.10系の運用
+
+同期排他はファイルロックではなくMySQLの `import_locks` テーブルを使うため、Web PHPとCron PHPが別プロセスでも共通して機能します。heteml固有パスをアプリへ埋め込む必要はありません。
+
+アップデート後はDBをバックアップしたうえで、CLI PHPから次を確認してください。
+
+```bash
+php bin/doctor.php
+php bin/maintenance.php --dry-run
+```
+
+maintenanceはSearch Console分析データや改善タスクを削除しません。`--execute` はdry-runの件数を確認してから指定してください。
