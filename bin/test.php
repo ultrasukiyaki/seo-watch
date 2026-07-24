@@ -129,6 +129,13 @@ $test('migration does not offset existing datetimes', function () use ($assert):
     $source = file_get_contents(dirname(__DIR__) . '/app/SchemaManager.php');
     $assert(is_string($source) && !preg_match('/DATE_ADD\\s*\\([^)]*INTERVAL\\s+9\\s+HOUR/i', $source));
 });
+$test('sync lease verifies ownership after a no-op heartbeat', function () use ($assert): void {
+    $source = file_get_contents(dirname(__DIR__) . '/app/ImportLockService.php');
+    $assert(is_string($source) && str_contains($source, "hash_equals(\$lock['owner_hash'], \$ownerHash)"));
+    $assert(is_string($source) && str_contains($source, 'expires_at >= UTC_TIMESTAMP() AS is_active'));
+    $assert(is_string($source) && str_contains($source, 'AND expires_at >= UTC_TIMESTAMP()'));
+    $assert(is_string($source) && !str_contains($source, 'MYSQL_ATTR_FOUND_ROWS'));
+});
 
 $failed = 0;
 foreach ($tests as [$name, $ok, $message]) {

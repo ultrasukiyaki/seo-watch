@@ -8,8 +8,8 @@
 
 | Version | Supported |
 |---|---|
-| 0.10.1 | Yes |
-| 0.10.0 and older | Upgrade recommended |
+| 0.10.2 | Yes |
+| 0.10.1 and older | Upgrade recommended |
 
 ## Reporting a vulnerability
 

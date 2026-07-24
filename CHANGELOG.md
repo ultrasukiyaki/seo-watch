@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.10.2 - 2026-07-24
+
+- 同期leaseのheartbeatが同一秒・同一値のno-op更新になり、PDOのaffected rowsが0となった場合に、正しい所有者を所有権喪失と誤判定する問題を修正
+- heartbeatのaffected rowsが0の場合、owner hashとDB UTC基準のlease期限を明示確認するよう改善
+- 所有権エラーを同期履歴の`lock`へ分類し、同期失敗後のlease解放エラーが元のエラーを上書きしないよう修正
+- no-op heartbeat、別所有者、期限切れ、stale takeover、releaseのMySQL回帰テストを追加
+- DBスキーマおよび既存データの変更はなし
+
 ## v0.10.1 - 2026-07-24
 
 - 全Markdownへv0.10系の変更点、運用方法、確認手順を整理して追記

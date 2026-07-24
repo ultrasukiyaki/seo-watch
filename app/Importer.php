@@ -25,6 +25,7 @@ final class Importer
         $owner = $this->locks->acquire($propertyId, $source);
         $runId = $this->startRun($propertyId, $startDate, $endDate, $source, $userId);
         $total = 0;
+        $failed = false;
 
         try {
             $period = new DatePeriod(
@@ -43,10 +44,18 @@ final class Importer
             $this->finishRun($runId, 'success', $total, null);
             return $total;
         } catch (\Throwable $e) {
+            $failed = true;
             $this->finishRun($runId, 'failed', $total, $e->getMessage());
             throw $e;
         } finally {
-            $this->locks->release($propertyId, $owner);
+            try {
+                $this->locks->release($propertyId, $owner);
+            } catch (\Throwable $releaseError) {
+                // Do not replace the synchronization error with cleanup failure.
+                if (!$failed) {
+                    throw $releaseError;
+                }
+            }
         }
     }
 
@@ -153,6 +162,7 @@ final class Importer
     {
         $value = strtolower($message);
         return match (true) {
+            str_contains($value, 'lock'), str_contains($value, 'ロック'), str_contains($value, '所有権') => 'lock',
             str_contains($value, 'oauth'), str_contains($value, '認証') => 'oauth',
             str_contains($value, '429'), str_contains($value, 'rate') => 'rate_limit',
             str_contains($value, 'sql'), str_contains($value, 'database') => 'database',
