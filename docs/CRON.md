@@ -78,3 +78,16 @@ php bin/import.php --days=3
 - OAuthアプリがTesting状態のまま7日を超えた
 - Search Consoleプロパティが未選択
 - CronのPHPパスまたはアプリ絶対パスが誤っている
+
+## v0.10系の同期排他と履歴
+
+Cronラッパーは `SEO_WATCH_IMPORT_SOURCE=cron` を設定し、同期履歴へ実行元を記録します。Webや別Cronが同じプロパティを取得中の場合、DB leaseにより多重実行は開始されません。
+
+正常終了・例外終了では所有者一致を確認してleaseを解除します。プロセス強制終了などで残ったleaseは有効期限後にstaleとなります。
+
+```bash
+php bin/maintenance.php --dry-run --target=import-locks
+php bin/maintenance.php --execute --target=import-locks
+```
+
+内部所有者トークンやPIDはCronログへ出力しません。

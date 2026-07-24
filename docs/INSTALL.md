@@ -159,3 +159,15 @@ php bin/doctor.php
 ```
 
 すべて `[OK]` なら基本設定は完了です。
+
+## 9. v0.10系の初期確認
+
+初回アクセス時に `schema_migrations`、`improvement_tasks`、`improvement_history`、`import_locks` が自動作成されます。手動SQLは不要です。
+
+```bash
+php bin/doctor.php
+php bin/maintenance.php --dry-run
+php bin/import.php --days=3
+```
+
+改善管理画面が表示され、viewerでは更新操作が表示・実行できないことを確認してください。インストール直後に改善提案が一括タスク登録されることはありません。必要な提案だけを記事詳細から追加します。

@@ -34,6 +34,13 @@ config/local.php
 - 更新後に `php bin/doctor.php` と `php bin/maintenance.php --dry-run` を実行してください。
 - 詳細は[改善タスク運用](IMPROVEMENT_WORKFLOW.md)、[同期ロック](IMPORT_LOCKING.md)、[マイグレーション](MIGRATIONS.md)を参照してください。
 
+## v0.10.0からv0.10.1
+
+- アプリ機能とDBスキーマに追加変更はありません。
+- 全Markdownへv0.10系の運用説明を整理して追記しています。
+- `VERSION` と静的ファイルのキャッシュバスターだけが更新されます。
+- v0.10.0の改善タスク、履歴、同期履歴、lease、設定はそのまま維持されます。
+
 ## v0.8.0からv0.9.0
 
 - 初回アクセス時に既存`settings`テーブルへ更新者列を冪等に追加します。既存日時は変更しません。

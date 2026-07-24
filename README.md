@@ -1,6 +1,6 @@
 # 10yendama SEO Watch
 
-現在のバージョンはv0.10.0です。UTC保存、表示タイムゾーン、Search ConsoleのPT基準日の詳細は[タイムゾーンガイド](docs/TIMEZONES.md)を参照してください。
+現在のバージョンはv0.10.1です。v0.10.1は、v0.10.0で導入した改善管理・同期排他・マイグレーション・maintenanceの説明を全ドキュメントで整理した修正版です。
 
 ![screenshot](./screenshot.png)
 
@@ -26,6 +26,15 @@ ComposerやNode.jsを使わず、PHPとMySQLだけで動作します。Apache系
 - ブラウザ手動取得とCLI/Cron取得
 - SEO改善タスク、追記専用履歴、記事修正日、修正前後28日の簡易比較
 - Web・CLI・Cron共通の同期排他、同期状態、maintenance CLI、DBマイグレーション管理
+
+## v0.10系の改善ワークフロー
+
+1. ダッシュボードや記事詳細で改善候補を確認します。
+2. 記事詳細の「タスクへ追加」または改善管理画面から手動作成します。
+3. 未対応、対応中、完了、保留、対象外の状態、担当者、メモを管理します。
+4. 記事修正日を記録すると、Search ConsoleのPT基準DATEで前後28日を比較できます。
+
+比較結果は修正との因果関係を断定するものではありません。季節変動、検索需要、Googleアップデートなどの影響を含む可能性があります。
 
 ## 動作要件
 
@@ -96,6 +105,10 @@ php bin/reset-password.php --user=admin
 
 # 期限切れ認証データと180日超の監査ログを整理
 php bin/purge-auth-data.php
+
+# v0.10系の運用データを安全に確認・整理（既定はdry-run）
+php bin/maintenance.php --dry-run
+php bin/maintenance.php --execute --target=import-runs
 ```
 
 `bin/*.php` のshebangは汎用の `#!/usr/bin/env php` です。共有サーバー固有のPHPパスはソースへ直接書き込まず、Cronコマンドまたは `PHP_BIN` 環境変数で指定してください。
