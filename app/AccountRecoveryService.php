@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Tenyendama\SeoWatch;
 
 use PDO;
+use PDOException;
 use RuntimeException;
 
 final class AccountRecoveryService
@@ -170,24 +171,45 @@ final class AccountRecoveryService
     public function requestEmailChange(int $userId, string $currentPassword, string $newEmail): void
     {
         $newEmail = EmailAddress::normalize($newEmail);
-        $duplicate = $this->pdo->prepare(
-            'SELECT 1 FROM admins WHERE id <> :id AND (email = :email OR pending_email = :email) LIMIT 1'
-        );
-        $duplicate->execute(['id' => $userId, 'email' => $newEmail]);
-        if ($duplicate->fetchColumn()) {
-            throw new RuntimeException('そのメールアドレスはすでに使用されています。');
-        }
-        $stmt = $this->pdo->prepare('SELECT password_hash FROM admins WHERE id = :id');
-        $stmt->execute(['id' => $userId]);
-        $hash = $stmt->fetchColumn();
-        if (!$hash || !password_verify($currentPassword, (string)$hash)) {
-            throw new RuntimeException('現在のパスワードが違います。');
-        }
         try {
+            $duplicate = $this->pdo->prepare(
+                'SELECT 1 FROM admins
+                 WHERE id <> :current_user_id
+                   AND (LOWER(email) = :verified_email OR LOWER(pending_email) = :pending_email)
+                 LIMIT 1'
+            );
+            $duplicate->execute([
+                'current_user_id' => $userId,
+                'verified_email' => $newEmail,
+                'pending_email' => $newEmail,
+            ]);
+            if ($duplicate->fetchColumn()) {
+                throw new RuntimeException('そのメールアドレスはすでに使用されています。');
+            }
+            $stmt = $this->pdo->prepare('SELECT password_hash FROM admins WHERE id = :id');
+            $stmt->execute(['id' => $userId]);
+            $hash = $stmt->fetchColumn();
+            if (!$hash || !password_verify($currentPassword, (string)$hash)) {
+                throw new RuntimeException('現在のパスワードが違います。');
+            }
             $this->pdo->prepare('UPDATE admins SET pending_email = :email WHERE id = :id')
                 ->execute(['email' => $newEmail, 'id' => $userId]);
-        } catch (\PDOException $e) {
-            throw new RuntimeException('そのメールアドレスはすでに使用されています。', 0, $e);
+        } catch (PDOException $e) {
+            if ((string)$e->getCode() === '23000') {
+                throw new RuntimeException('そのメールアドレスはすでに使用されています。', 0, $e);
+            }
+            $correlationId = bin2hex(random_bytes(8));
+            error_log(json_encode([
+                'correlation_id' => $correlationId,
+                'category' => 'database',
+                'sqlstate' => (string)$e->getCode(),
+                'operation' => 'account_email_change',
+            ], JSON_UNESCAPED_SLASHES));
+            throw new RuntimeException(
+                "メールアドレスを保存できませんでした。入力内容を確認して、もう一度お試しください。（参照ID: {$correlationId}）",
+                0,
+                $e
+            );
         }
         $this->audit->log('email_added_pending', 'success', $userId, $userId);
         if (!$this->mailer->enabled()) {
@@ -205,12 +227,16 @@ final class AccountRecoveryService
             return false;
         }
         $issued = $this->tokens->issue($userId, UserActionTokenRepository::EMAIL_VERIFICATION, 1800, $newEmail, $userId);
-        $sent = $this->mailer->send(
-            $newEmail,
-            'メールアドレス確認のご案内',
-            "次のURLでメールアドレスを確認してください。\n\n" . $this->url('email-verify', $issued['token']) .
-            "\n\n有効期限: " . $this->formatExpiry($issued['expires_at']) . "\nこのURLは一度だけ利用できます。"
-        );
+        try {
+            $sent = $this->mailer->send(
+                $newEmail,
+                'メールアドレス確認のご案内',
+                "次のURLでメールアドレスを確認してください。\n\n" . $this->url('email-verify', $issued['token']) .
+                "\n\n有効期限: " . $this->formatExpiry($issued['expires_at']) . "\nこのURLは一度だけ利用できます。"
+            );
+        } catch (\Throwable) {
+            $sent = false;
+        }
         if (!$sent) {
             $this->audit->log('email_verification_failed', 'send_failed', $userId, $userId);
             return false;

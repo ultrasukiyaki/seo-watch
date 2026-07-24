@@ -8,7 +8,8 @@
 
 | Version | Supported |
 |---|---|
-| 0.11.0 | Yes |
+| 0.11.1 | Yes |
+| 0.11.0 | Upgrade recommended |
 | 0.10.2 | Yes |
 | 0.10.1 and older | Upgrade recommended |
 
