@@ -1,6 +1,7 @@
 <?php
 use Tenyendama\SeoWatch\TrendChart;
 use Tenyendama\SeoWatch\View;
+use Tenyendama\SeoWatch\Csrf;
 
 $deltaClass = static function (float $value, bool $higherIsBetter = true): string {
     if (abs($value) < 0.00001) {
@@ -95,7 +96,19 @@ $deltaText = static function (float $value, int $decimals = 0, string $suffix = 
         <?php foreach ($advice['actions'] as $action): ?>
         <article class="action-item">
             <span class="priority-tag priority-<?=View::e($action['priority'])?>"><?=View::e($action['priority'])?></span>
-            <div><strong><?=View::e($action['title'])?></strong><p><?=View::e($action['description'])?></p></div>
+            <div><strong><?=View::e($action['title'])?></strong><p><?=View::e($action['description'])?></p>
+            <?php if (!empty($isSuperuser)): ?>
+                <form method="post" action="index.php?r=improvements/create">
+                    <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
+                    <input type="hidden" name="normalized_page_url" value="<?=View::e($pageUrl)?>">
+                    <input type="hidden" name="task_type" value="content">
+                    <input type="hidden" name="title" value="<?=View::e($action['title'])?>">
+                    <input type="hidden" name="description" value="<?=View::e($action['description'])?>">
+                    <input type="hidden" name="source_score" value="<?=View::e((string)$detail['score'])?>">
+                    <button class="button small-button" type="submit">タスクへ追加</button>
+                </form>
+            <?php endif; ?>
+            </div>
         </article>
         <?php endforeach; ?>
     </div>

@@ -1,6 +1,6 @@
 # 10yendama SEO Watch
 
-現在のバージョンはv0.9.0です。UTC保存、表示タイムゾーン、Search ConsoleのPT基準日の詳細は[タイムゾーンガイド](docs/TIMEZONES.md)を参照してください。
+現在のバージョンはv0.10.0です。UTC保存、表示タイムゾーン、Search ConsoleのPT基準日の詳細は[タイムゾーンガイド](docs/TIMEZONES.md)を参照してください。
 
 ![screenshot](./screenshot.png)
 
@@ -24,6 +24,8 @@ ComposerやNode.jsを使わず、PHPとMySQLだけで動作します。Apache系
 - セッション一括無効化、認証レート制限、認証監査ログ
 - OAuthトークンはAES-256-GCMで暗号化保存
 - ブラウザ手動取得とCLI/Cron取得
+- SEO改善タスク、追記専用履歴、記事修正日、修正前後28日の簡易比較
+- Web・CLI・Cron共通の同期排他、同期状態、maintenance CLI、DBマイグレーション管理
 
 ## 動作要件
 
@@ -53,6 +55,10 @@ ComposerやNode.jsは不要です。
 - [heteml向け補足](docs/HETEML.md)
 - [アップデート手順](docs/UPGRADING.md)
 - [アカウント回復・認証運用](docs/ACCOUNT_RECOVERY.md)
+- [改善タスク運用](docs/IMPROVEMENT_WORKFLOW.md)
+- [同期ロック](docs/IMPORT_LOCKING.md)
+- [メンテナンスCLI](docs/MAINTENANCE.md)
+- [DBマイグレーション](docs/MIGRATIONS.md)
 
 ## ユーザー権限
 
@@ -60,6 +66,8 @@ ComposerやNode.jsは不要です。
 |---|:---:|:---:|
 | ダッシュボード・分析画面 | ✓ | ✓ |
 | 記事詳細・改善提案 | ✓ | ✓ |
+| 改善タスク閲覧 | ✓ | ✓ |
+| 改善タスク作成・更新 | ✓ | — |
 | Google OAuth・プロパティ設定 | ✓ | — |
 | データ取り込み・URL正規化 | ✓ | — |
 | 閲覧ユーザー作成・削除 | ✓ | — |

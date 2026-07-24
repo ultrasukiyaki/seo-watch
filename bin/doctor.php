@@ -20,6 +20,9 @@ if (!$failed) {
         $services = require dirname(__DIR__) . '/app/bootstrap.php';
         extract($services, EXTR_SKIP);
         echo "[OK] Database connection and migrations\n";
+        $migration = $pdo->query('SELECT migration_id, status, applied_at FROM schema_migrations ORDER BY started_at DESC LIMIT 1')->fetch();
+        printf("[INFO] App version: v%s\n", trim((string)file_get_contents(dirname(__DIR__) . '/VERSION')));
+        printf("[%s] DB schema: %s (%s)\n", ($migration['status'] ?? '') === 'applied' ? 'OK' : 'NG', $migration['migration_id'] ?? 'unknown', $migration['status'] ?? 'unknown');
         $dbTimezone = (string)$pdo->query('SELECT @@session.time_zone')->fetchColumn();
         printf("[%s] DB session timezone: %s\n", $dbTimezone === '+00:00' ? 'OK' : 'NG', $dbTimezone);
         printf("[INFO] PHP timezone: %s\n", date_default_timezone_get());

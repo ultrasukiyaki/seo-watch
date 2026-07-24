@@ -27,7 +27,8 @@ try {
     if ($start > $end) throw new RuntimeException('開始日は終了日以前にしてください。');
 
     printf("[%s] Import %s: %s -> %s (Search Console date, PT)\n", $dateTime->detail($dateTime->nowUtc()), $active['site_url'], $start, $end);
-    $rows = $importer->import($active, $start, $end);
+    $source = getenv('SEO_WATCH_IMPORT_SOURCE') === 'cron' ? 'cron' : 'cli';
+    $rows = $importer->import($active, $start, $end, 'web', $source);
     printf("Done: %s rows\n", number_format($rows));
 } catch (Throwable $e) {
     fwrite(STDERR, 'ERROR: ' . $e->getMessage() . PHP_EOL);

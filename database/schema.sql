@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_by_user_id BIGINT UNSIGNED NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    migration_id VARCHAR(190) NOT NULL PRIMARY KEY,
+    checksum CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    started_at DATETIME NULL,
+    applied_at DATETIME NULL,
+    status VARCHAR(20) NOT NULL,
+    error_summary VARCHAR(500) NULL,
+    app_version VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS oauth_tokens (
     provider VARCHAR(50) PRIMARY KEY,
     encrypted_token LONGTEXT NOT NULL,
@@ -139,13 +149,75 @@ CREATE TABLE IF NOT EXISTS page_metadata (
 CREATE TABLE IF NOT EXISTS import_runs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     property_id BIGINT UNSIGNED NOT NULL,
+    source VARCHAR(16) NOT NULL DEFAULT 'web',
     started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finished_at DATETIME NULL,
+    heartbeat_at DATETIME NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'running',
     rows_imported BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    rows_fetched BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    rows_skipped BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    error_category VARCHAR(20) NULL,
+    correlation_id CHAR(32) NULL,
+    user_id BIGINT UNSIGNED NULL,
     message TEXT NULL,
     CONSTRAINT fk_import_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
     KEY idx_import_property_started (property_id, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS improvement_tasks (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    property_id BIGINT UNSIGNED NOT NULL,
+    normalized_page_hash BINARY(32) NOT NULL,
+    normalized_page_url TEXT NOT NULL,
+    task_type VARCHAR(32) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    source_query TEXT NULL,
+    source_score DECIMAL(12,2) NULL,
+    suggestion_hash BINARY(32) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'open',
+    note TEXT NULL,
+    assigned_user_id BIGINT UNSIGNED NULL,
+    revision_date DATE NULL,
+    started_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by_user_id BIGINT UNSIGNED NOT NULL,
+    updated_by_user_id BIGINT UNSIGNED NOT NULL,
+    UNIQUE KEY uq_improvement_suggestion (property_id, normalized_page_hash, task_type, suggestion_hash),
+    KEY idx_improvement_property_status (property_id, status, updated_at),
+    KEY idx_improvement_assignee (assigned_user_id),
+    CONSTRAINT fk_improvement_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    CONSTRAINT fk_improvement_assignee FOREIGN KEY (assigned_user_id) REFERENCES admins(id) ON DELETE SET NULL,
+    CONSTRAINT fk_improvement_creator FOREIGN KEY (created_by_user_id) REFERENCES admins(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_improvement_updater FOREIGN KEY (updated_by_user_id) REFERENCES admins(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS improvement_history (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT UNSIGNED NOT NULL,
+    event_type VARCHAR(32) NOT NULL,
+    before_json TEXT NULL,
+    after_json TEXT NULL,
+    actor_user_id BIGINT UNSIGNED NULL,
+    metadata_json TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_improvement_history_task (task_id, created_at),
+    CONSTRAINT fk_improvement_history_task FOREIGN KEY (task_id) REFERENCES improvement_tasks(id) ON DELETE CASCADE,
+    CONSTRAINT fk_improvement_history_actor FOREIGN KEY (actor_user_id) REFERENCES admins(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS import_locks (
+    property_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    owner_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    source VARCHAR(16) NOT NULL,
+    acquired_at DATETIME NOT NULL,
+    heartbeat_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    CONSTRAINT fk_import_lock_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    KEY idx_import_lock_expiry (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

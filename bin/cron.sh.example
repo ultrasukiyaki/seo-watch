@@ -11,4 +11,4 @@ APP_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 PHP_BIN=${PHP_BIN:-php}
 IMPORT_DAYS=${IMPORT_DAYS:-3}
 
-exec "$PHP_BIN" "$APP_DIR/bin/import.php" --days="$IMPORT_DAYS"
+SEO_WATCH_IMPORT_SOURCE=cron exec "$PHP_BIN" "$APP_DIR/bin/import.php" --days="$IMPORT_DAYS"

@@ -13,15 +13,17 @@ final class Importer
     public function __construct(
         private readonly PDO $pdo,
         private readonly SearchConsoleApi $api,
-        private readonly UrlNormalizer $normalizer
+        private readonly UrlNormalizer $normalizer,
+        private readonly ImportLockService $locks
     ) {
     }
 
-    public function import(array $property, string $startDate, string $endDate, string $searchType = 'web'): int
+    public function import(array $property, string $startDate, string $endDate, string $searchType = 'web', string $source = 'web', ?int $userId = null): int
     {
         $propertyId = (int)$property['id'];
         $siteUrl = (string)$property['site_url'];
-        $runId = $this->startRun($propertyId, $startDate, $endDate);
+        $owner = $this->locks->acquire($propertyId, $source);
+        $runId = $this->startRun($propertyId, $startDate, $endDate, $source, $userId);
         $total = 0;
 
         try {
@@ -32,6 +34,9 @@ final class Importer
             );
             foreach ($period as $date) {
                 $total += $this->importDay($propertyId, $siteUrl, $date->format('Y-m-d'), $searchType);
+                $this->locks->heartbeat($propertyId, $owner);
+                $this->pdo->prepare('UPDATE import_runs SET heartbeat_at = UTC_TIMESTAMP(), rows_imported = :rows WHERE id = :id')
+                    ->execute(['rows' => $total, 'id' => $runId]);
             }
             $stmt = $this->pdo->prepare('UPDATE search_properties SET last_synced_at = CURRENT_TIMESTAMP WHERE id = :id');
             $stmt->execute(['id' => $propertyId]);
@@ -40,6 +45,8 @@ final class Importer
         } catch (\Throwable $e) {
             $this->finishRun($runId, 'failed', $total, $e->getMessage());
             throw $e;
+        } finally {
+            $this->locks->release($propertyId, $owner);
         }
     }
 
@@ -115,20 +122,43 @@ final class Importer
         }
     }
 
-    private function startRun(int $propertyId, string $startDate, string $endDate): int
+    private function startRun(int $propertyId, string $startDate, string $endDate, string $source, ?int $userId): int
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO import_runs (property_id, start_date, end_date, status) VALUES (:property_id, :start_date, :end_date, "running")'
+            'INSERT INTO import_runs (property_id, source, start_date, end_date, status, heartbeat_at, correlation_id, user_id)
+             VALUES (:property_id, :source, :start_date, :end_date, "running", UTC_TIMESTAMP(), :correlation, :user_id)'
         );
-        $stmt->execute(['property_id' => $propertyId, 'start_date' => $startDate, 'end_date' => $endDate]);
+        $stmt->execute([
+            'property_id' => $propertyId, 'source' => $source, 'start_date' => $startDate,
+            'end_date' => $endDate, 'correlation' => bin2hex(random_bytes(16)), 'user_id' => $userId,
+        ]);
         return (int)$this->pdo->lastInsertId();
     }
 
     private function finishRun(int $runId, string $status, int $rows, ?string $message): void
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE import_runs SET finished_at = CURRENT_TIMESTAMP, status = :status, rows_imported = :rows, message = :message WHERE id = :id'
+            'UPDATE import_runs SET finished_at = UTC_TIMESTAMP(), heartbeat_at = UTC_TIMESTAMP(),
+             status = :status, rows_imported = :rows, error_category = :category, message = :message WHERE id = :id'
         );
-        $stmt->execute(['status' => $status, 'rows' => $rows, 'message' => $message, 'id' => $runId]);
+        $safeMessage = $message === null ? null : mb_substr(preg_replace('/(?:access|refresh)[_-]?token|client[_-]?secret|password/iu', '[secret]', $message), 0, 500);
+        $stmt->execute([
+            'status' => $status, 'rows' => $rows,
+            'category' => $status === 'failed' ? $this->errorCategory((string)$message) : null,
+            'message' => $safeMessage, 'id' => $runId,
+        ]);
+    }
+
+    private function errorCategory(string $message): string
+    {
+        $value = strtolower($message);
+        return match (true) {
+            str_contains($value, 'oauth'), str_contains($value, '認証') => 'oauth',
+            str_contains($value, '429'), str_contains($value, 'rate') => 'rate_limit',
+            str_contains($value, 'sql'), str_contains($value, 'database') => 'database',
+            str_contains($value, 'network'), str_contains($value, 'curl') => 'network',
+            str_contains($value, 'google') => 'google_api',
+            default => 'unknown',
+        };
     }
 }

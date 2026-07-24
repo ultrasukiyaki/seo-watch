@@ -25,6 +25,15 @@ config/local.php
 3. `php bin/doctor.php`を実行します。
 4. ダッシュボード、設定、ユーザー権限、データ取得を確認します。
 
+## v0.9.0からv0.10.0
+
+- 更新前にDBバックアップを取得してください。
+- 初回アクセス時に改善タスク、改善履歴、同期lease、マイグレーション管理を冪等に追加します。
+- 既存のSearch Console実績、ユーザー、OAuth、監査ログ、設定は変更・削除しません。
+- v0.9.0相当の既存DBは `baseline_v0.9.0` として安全に登録されます。
+- 更新後に `php bin/doctor.php` と `php bin/maintenance.php --dry-run` を実行してください。
+- 詳細は[改善タスク運用](IMPROVEMENT_WORKFLOW.md)、[同期ロック](IMPORT_LOCKING.md)、[マイグレーション](MIGRATIONS.md)を参照してください。
+
 ## v0.8.0からv0.9.0
 
 - 初回アクセス時に既存`settings`テーブルへ更新者列を冪等に追加します。既存日時は変更しません。
