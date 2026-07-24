@@ -144,10 +144,10 @@ SQL);
     {
         $stmt = $this->pdo->prepare(
             'UPDATE schema_migrations SET status = :status,
-             applied_at = CASE WHEN :status = "applied" THEN UTC_TIMESTAMP() ELSE NULL END,
+             applied_at = CASE WHEN :applied_status = "applied" THEN UTC_TIMESTAMP() ELSE NULL END,
              error_summary = :error WHERE migration_id = :id'
         );
-        $stmt->execute(['status' => $status, 'error' => $error, 'id' => $id]);
+        $stmt->execute(['status' => $status, 'applied_status' => $status, 'error' => $error, 'id' => $id]);
         $this->releaseMigrationLock();
     }
 
