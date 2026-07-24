@@ -17,6 +17,15 @@ final class SchemaManager
         $this->migrateUsers();
         $this->migrateAuthentication();
         $this->migrateMigrationState();
+        if ($this->startMigration('20260725_001_v011_mail', hash('sha256', 'seo-watch-v0.11.0-mail-schema'))) {
+            try {
+                $this->migrateMail();
+                $this->finishMigration('20260725_001_v011_mail', 'applied', null);
+            } catch (\Throwable $e) {
+                $this->finishMigration('20260725_001_v011_mail', 'failed', 'メールDBスキーマ更新に失敗しました。');
+                throw $e;
+            }
+        }
         if ($this->startMigration('20260724_001_v010', hash('sha256', 'seo-watch-v0.10.0-schema'))) {
             try {
                 $this->migrateV010();
@@ -371,6 +380,49 @@ CREATE TABLE IF NOT EXISTS authentication_audit_logs (
     KEY idx_auth_audit_event (event_type, outcome),
     CONSTRAINT fk_auth_audit_actor FOREIGN KEY (actor_user_id) REFERENCES admins(id) ON DELETE SET NULL,
     CONSTRAINT fk_auth_audit_subject FOREIGN KEY (subject_user_id) REFERENCES admins(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+    }
+
+    private function migrateMail(): void
+    {
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS mail_settings (
+    id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+    transport VARCHAR(20) NOT NULL DEFAULT 'disabled',
+    from_name VARCHAR(190) NOT NULL DEFAULT '',
+    from_address VARCHAR(254) NOT NULL DEFAULT '',
+    reply_to VARCHAR(254) NULL,
+    envelope_from VARCHAR(254) NULL,
+    smtp_host VARCHAR(253) NOT NULL DEFAULT '',
+    smtp_port SMALLINT UNSIGNED NOT NULL DEFAULT 587,
+    smtp_encryption VARCHAR(20) NOT NULL DEFAULT 'starttls',
+    smtp_auth_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    smtp_username VARCHAR(254) NOT NULL DEFAULT '',
+    smtp_password_ciphertext LONGTEXT NULL,
+    smtp_timeout TINYINT UNSIGNED NOT NULL DEFAULT 10,
+    last_connection_test_at DATETIME NULL,
+    last_connection_test_status VARCHAR(32) NULL,
+    last_test_mail_at DATETIME NULL,
+    last_test_mail_status VARCHAR(32) NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by_user_id BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_mail_settings_actor FOREIGN KEY (updated_by_user_id) REFERENCES admins(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+        $this->pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS mail_delivery_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    message_type VARCHAR(64) NOT NULL,
+    recipient_hash CHAR(64) NOT NULL,
+    transport VARCHAR(20) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    error_category VARCHAR(32) NULL,
+    sent_at DATETIME NULL,
+    correlation_id CHAR(32) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_mail_delivery_created (created_at),
+    KEY idx_mail_delivery_correlation (correlation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
     }

@@ -71,3 +71,6 @@ config/local.php
 - heteml固有のCronパスは`bin/cron.sh.example`と`docs/HETEML.md`へ分離しました。
 - インストーラーとドキュメントを汎用ホスティング向けに整理しました。
 - `config/local.php`、OAuthトークン、取得済みデータは変更されません。
+## v0.10.2からv0.11.0
+
+初回アクセス時にメール設定・配送履歴テーブルが自動作成されます。既存ユーザーとメール状態は維持され、配送方式は自動的に有効化されません。設定画面でSMTPまたはPHP mail()を明示的に選択してください。`config/local.php`にmail配列がなくても動作します。

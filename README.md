@@ -1,6 +1,8 @@
 # 10yendama SEO Watch
 
-現在のバージョンはv0.10.2です。v0.10.2は、同期leaseのheartbeatが同一秒のno-op更新になった際に、正しい所有者を所有権喪失と誤判定する問題の修正版です。
+現在のバージョンはv0.11.0です。v0.11.0では、無効・PHP mail()・SMTPを選べる共通メール配送、SMTP設定の暗号化保存、接続テスト、管理者メールの後付けを追加しました。
+
+メール設定は[メール配送ガイド](docs/MAIL.md)と[SMTP設定](docs/SMTP.md)を参照してください。
 
 ![screenshot](./screenshot.png)
 

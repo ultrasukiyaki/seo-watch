@@ -105,10 +105,14 @@ final class UserActionTokenRepository
         }
     }
 
-    public function invalidateForUser(int $userId): void
+    public function invalidateForUser(int $userId, ?string $purpose = null): void
     {
-        $this->pdo->prepare(
-            'UPDATE user_action_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = :id AND used_at IS NULL'
-        )->execute(['id' => $userId]);
+        $sql = 'UPDATE user_action_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = :id AND used_at IS NULL';
+        $params = ['id' => $userId];
+        if ($purpose !== null) {
+            $sql .= ' AND purpose = :purpose';
+            $params['purpose'] = $purpose;
+        }
+        $this->pdo->prepare($sql)->execute($params);
     }
 }

@@ -39,6 +39,14 @@ $values = [
     'timezone' => TimezoneService::phpDefaultOrUtc(),
     'import_lag_days' => '3',
     'google_client_id' => '',
+    'mail_transport' => 'disabled',
+    'mail_from_name' => '10yendama SEO Watch',
+    'mail_from_address' => '',
+    'smtp_host' => '',
+    'smtp_port' => '587',
+    'smtp_encryption' => 'starttls',
+    'smtp_username' => '',
+    'smtp_timeout' => '10',
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -87,10 +95,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($passwordError !== null) {
         $errors[] = $passwordError;
     }
-    try {
-        $values['admin_email'] = \Tenyendama\SeoWatch\EmailAddress::normalize($values['admin_email']);
-    } catch (RuntimeException $e) {
-        $errors[] = $e->getMessage();
+    if ($values['admin_email'] !== '') {
+        try {
+            $values['admin_email'] = \Tenyendama\SeoWatch\EmailAddress::normalize($values['admin_email']);
+        } catch (RuntimeException $e) {
+            $errors[] = $e->getMessage();
+        }
+    }
+    if (!in_array($values['mail_transport'], ['disabled', 'php_mail', 'smtp'], true)) {
+        $errors[] = 'メール配送方式が不正です。';
     }
 
     if ($values['google_client_id'] === '' || $googleClientSecret === '') {
@@ -131,9 +144,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->exec("UPDATE admins SET role = 'viewer' WHERE role = 'superuser'");
             $stmt = $pdo->prepare(
-                'INSERT INTO admins (username, password_hash, role, email) VALUES (:username, :password_hash, :role, :email)
+                'INSERT INTO admins (username, password_hash, role, pending_email) VALUES (:username, :password_hash, :role, :email)
                  ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role),
-                 email = VALUES(email), updated_at = CURRENT_TIMESTAMP'
+                 pending_email = VALUES(pending_email), updated_at = CURRENT_TIMESTAMP'
             );
             $stmt->execute([
                 'username' => $values['admin_user'],
@@ -147,12 +160,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (new AppSettings($pdo))->set(AppSettings::DISPLAY_TIMEZONE, $values['timezone'], $adminId);
 
             $baseUrl = rtrim($values['base_url'], '/');
+            $appKey = 'base64:' . base64_encode(random_bytes(32));
+            $mailRepository = new \Tenyendama\SeoWatch\MailSettingsRepository(
+                $pdo,
+                new \Tenyendama\SeoWatch\Crypto($appKey)
+            );
+            $mailRepository->save([
+                'transport' => $values['mail_transport'],
+                'from_name' => $values['mail_from_name'],
+                'from_address' => $values['mail_from_address'],
+                'smtp_host' => $values['smtp_host'],
+                'smtp_port' => $values['smtp_port'],
+                'smtp_encryption' => $values['smtp_encryption'],
+                'smtp_auth_enabled' => isset($_POST['smtp_auth_enabled']),
+                'smtp_username' => $values['smtp_username'],
+                'smtp_password' => (string)($_POST['smtp_password'] ?? ''),
+                'smtp_timeout' => $values['smtp_timeout'],
+            ], $adminId);
+            if ($values['admin_email'] !== '' && $values['mail_transport'] !== 'disabled') {
+                $clock = new \Tenyendama\SeoWatch\SystemClock();
+                $formatter = new \Tenyendama\SeoWatch\DateTimeFormatter($clock, $values['timezone']);
+                $audit = new \Tenyendama\SeoWatch\AuthenticationAuditLogger($pdo, $appKey, $formatter);
+                $factory = new \Tenyendama\SeoWatch\MailTransportFactory($mailRepository);
+                $mailer = new \Tenyendama\SeoWatch\MailService($values['mail_transport'], $factory->create());
+                $recovery = new \Tenyendama\SeoWatch\AccountRecoveryService(
+                    $pdo,
+                    new \Tenyendama\SeoWatch\UserActionTokenRepository($pdo, $clock),
+                    $mailer,
+                    $audit,
+                    $baseUrl,
+                    $formatter
+                );
+                if (!$recovery->sendEmailVerification($adminId)) {
+                    throw new RuntimeException('管理者の確認メールを送信できませんでした。メール設定を確認してください。');
+                }
+            }
             $config = [
                 'app' => [
                     'name' => '10yendama SEO Watch',
                     'base_url' => $baseUrl,
                     'timezone' => 'UTC',
-                    'key' => 'base64:' . base64_encode(random_bytes(32)),
+                    'key' => $appKey,
                     'session_name' => 'seo_watch_session',
                     'import_lag_days' => max(1, min(7, (int)$values['import_lag_days'])),
                 ],
@@ -171,11 +219,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'client_id' => $values['google_client_id'],
                     'client_secret' => $googleClientSecret,
                     'redirect_uri' => $baseUrl . '/oauth-callback.php',
-                ],
-                'mail' => [
-                    'enabled' => false,
-                    'from_address' => 'no-reply@example.com',
-                    'from_name' => '10yendama SEO Watch',
                 ],
             ];
 
@@ -275,8 +318,26 @@ $callbackUrl = rtrim($values['base_url'], '/') . '/oauth-callback.php';
             <h2>スーパーユーザー</h2>
             <p class="hint wide">ここで作成するアカウントだけが、Google連携・データ更新・設定変更・閲覧ユーザー管理を行えます。</p>
             <label>ユーザー名<input name="admin_user" value="<?=h($values['admin_user'])?>" minlength="3" maxlength="64" required></label>
-            <label>メールアドレス<input type="email" name="admin_email" value="<?=h($values['admin_email'])?>" autocomplete="email" required></label>
+            <label>メールアドレス（任意）<input type="email" name="admin_email" value="<?=h($values['admin_email'])?>" autocomplete="email"></label>
+            <p class="hint wide">メールアドレスはインストール後にも追加できます。配送が未設定の場合は確認待ちになります。</p>
             <label>パスワード<input type="password" name="admin_pass" minlength="12" maxlength="128" autocomplete="new-password" required></label>
+
+            <h2>メール機能</h2>
+            <p class="hint wide">パスワード再設定、メール確認、ユーザー招待、セキュリティ通知に使用します。インストール後にも設定できます。</p>
+            <label class="wide">配送方式<select name="mail_transport">
+                <option value="disabled" <?=$values['mail_transport']==='disabled'?'selected':''?>>使用しない</option>
+                <option value="php_mail" <?=$values['mail_transport']==='php_mail'?'selected':''?>>PHP mail()を使用</option>
+                <option value="smtp" <?=$values['mail_transport']==='smtp'?'selected':''?>>SMTPサーバーを使用</option>
+            </select></label>
+            <label>送信元名称<input name="mail_from_name" value="<?=h($values['mail_from_name'])?>"></label>
+            <label>Fromアドレス<input type="email" name="mail_from_address" value="<?=h($values['mail_from_address'])?>"></label>
+            <label class="wide">SMTPホスト<input name="smtp_host" value="<?=h($values['smtp_host'])?>"></label>
+            <label>ポート<input type="number" min="1" max="65535" name="smtp_port" value="<?=h($values['smtp_port'])?>"></label>
+            <label>暗号化<select name="smtp_encryption"><option value="starttls">STARTTLS</option><option value="tls">TLS接続</option><option value="none">暗号化なし</option></select></label>
+            <label><input type="checkbox" name="smtp_auth_enabled" value="1" checked> SMTP認証</label>
+            <label>SMTPユーザー名<input name="smtp_username" value="<?=h($values['smtp_username'])?>"></label>
+            <label>SMTPパスワード<input type="password" name="smtp_password" autocomplete="new-password"></label>
+            <label>タイムアウト（秒）<input type="number" min="1" max="60" name="smtp_timeout" value="<?=h($values['smtp_timeout'])?>"></label>
 
             <h2>Google OAuth</h2>
             <p class="hint wide">OAuthクライアントは「ウェブ アプリケーション」で作成し、上に表示されたHTTPSコールバックURLを登録してください。</p>

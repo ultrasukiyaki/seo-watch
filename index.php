@@ -299,6 +299,46 @@ try {
         redirectTo('settings');
     }
 
+    if ($route === 'mail/settings') {
+        postOnly();
+        $actor = $auth->user();
+        try {
+            $before = (string)$mailSettingsData['transport'];
+            $mailSettings->save($_POST, (int)$actor['id']);
+            $after = (string)($_POST['transport'] ?? 'disabled');
+            $audit->log('mail_settings_updated', 'success', (int)$actor['id'], null, [
+                'previous_transport' => $before, 'transport' => $after,
+            ]);
+            flash('success', 'メール設定を保存しました。');
+        } catch (RuntimeException $e) {
+            flash('danger', $e->getMessage());
+        }
+        redirectTo('settings');
+    }
+
+    if ($route === 'mail/connection-test') {
+        postOnly();
+        $actor = $auth->user();
+        if (!$rateLimiter->consume('smtp_connection_test', 'account', (string)$actor['id'], 5, 3600)) {
+            flash('danger', 'しばらく時間をおいてから再度お試しください。');
+            redirectTo('settings');
+        }
+        $current = $mailSettings->get();
+        if (($current['transport'] ?? '') !== 'smtp') {
+            flash('danger', 'SMTP設定を保存してから接続テストを実行してください。');
+            redirectTo('settings');
+        }
+        $transport = $mailTransportFactory->create($current);
+        $result = $transport instanceof \Tenyendama\SeoWatch\SmtpMailTransport
+            ? $transport->testConnection()
+            : \Tenyendama\SeoWatch\MailResult::failed('configuration', 'SMTP設定がありません。');
+        $mailSettings->recordTest('connection', $result);
+        $audit->log($result->success ? 'smtp_connection_test_succeeded' : 'smtp_connection_test_failed',
+            $result->success ? 'success' : 'failure', (int)$actor['id'], null, ['category' => $result->category]);
+        flash($result->success ? 'success' : 'danger', $result->message);
+        redirectTo('settings');
+    }
+
     if ($route === 'import/run') {
         postOnly();
         set_time_limit(0);
@@ -425,9 +465,26 @@ try {
                 (string)($_POST['current_password'] ?? ''),
                 (string)($_POST['email'] ?? '')
             );
-            flash('success', '新しいメールアドレスへ確認メールを送信しました。');
+            flash('success', $mailer->enabled()
+                ? '新しいメールアドレスへ確認メールを送信しました。'
+                : 'メールアドレスを確認待ちとして保存しました。配送設定後に確認メールを送信してください。');
         } catch (RuntimeException $e) {
             flash('danger', $e->getMessage());
+        }
+        redirectTo('account');
+    }
+
+    if ($route === 'account/email-send' || $route === 'account/email-cancel') {
+        postOnly();
+        $user = $auth->user();
+        if ($route === 'account/email-cancel') {
+            $accountRecovery->cancelPendingEmail((int)$user['id']);
+            flash('success', '確認待ちメールアドレスを取り消しました。');
+        } elseif (!$rateLimiter->consume('email_verification', 'account', (string)$user['id'], 3, 3600)) {
+            flash('danger', 'しばらく時間をおいてから再度お試しください。');
+        } else {
+            $sent = $accountRecovery->sendEmailVerification((int)$user['id']);
+            flash($sent ? 'success' : 'danger', $sent ? '確認メールを送信しました。' : '確認メールを送信できませんでした。');
         }
         redirectTo('account');
     }
@@ -497,7 +554,12 @@ try {
         } elseif (!$mailer->enabled() || empty($account['email']) || empty($account['email_verified_at'])) {
             flash('danger', '確認済みのスーパーユーザーメールと有効なメール設定が必要です。');
         } else {
-            $sent = $mailer->send((string)$account['email'], 'SEO Watch テストメール', "メール送信設定は正常です。\n");
+            $sent = $mailer->send((string)$account['email'], '[10yendama SEO Watch] テストメール',
+                "配送方式: " . ($mailSettingsData['transport'] ?? 'disabled') . "\n送信日時: "
+                . $dateTime->detail($dateTime->nowUtc()) . "\n表示タイムゾーン: " . $dateTime->timezoneName() . "\n");
+            $mailSettings->recordTest('mail', $sent
+                ? \Tenyendama\SeoWatch\MailResult::ok()
+                : \Tenyendama\SeoWatch\MailResult::failed('unknown', '送信失敗'));
             $audit->log($sent ? 'mail_send_success' : 'mail_send_failure', $sent ? 'success' : 'failure', (int)$actor['id'], (int)$actor['id']);
             flash($sent ? 'success' : 'danger', $sent ? 'テストメールを送信しました。' : 'テストメールを送信できませんでした。');
         }
@@ -885,8 +947,9 @@ try {
             'cronWrapperCommand' => $cronWrapperCommand,
             'lastRun' => $lastRun,
             'mailEnabled' => $mailer->enabled(),
-            'mailFromName' => (string)$config->get('mail.from_name', ''),
-            'mailFromAddress' => \Tenyendama\SeoWatch\EmailAddress::mask((string)$config->get('mail.from_address', '')),
+            'mailSettings' => $mailSettingsData,
+            'mailFromName' => (string)$mailSettingsData['from_name'],
+            'mailFromAddress' => \Tenyendama\SeoWatch\EmailAddress::mask((string)$mailSettingsData['from_address']),
             'mailFunctionAvailable' => function_exists('mail'),
             'superuserAccount' => $userRepo->find((int)$currentUser['id']),
             'timezoneIdentifiers' => \Tenyendama\SeoWatch\TimezoneService::identifiers(),
