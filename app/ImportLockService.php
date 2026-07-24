@@ -45,13 +45,33 @@ final class ImportLockService
     public function heartbeat(int $propertyId, string $owner): void
     {
         $lease = max(30, min(3600, $this->leaseSeconds));
+        $ownerHash = hash('sha256', $owner);
         $stmt = $this->pdo->prepare(
             'UPDATE import_locks SET heartbeat_at = UTC_TIMESTAMP(),
              expires_at = DATE_ADD(UTC_TIMESTAMP(), INTERVAL ' . $lease . ' SECOND)
-             WHERE property_id = :id AND owner_hash = :owner'
+             WHERE property_id = :id AND owner_hash = :owner
+               AND expires_at >= UTC_TIMESTAMP()'
         );
-        $stmt->execute(['id' => $propertyId, 'owner' => hash('sha256', $owner)]);
-        if ($stmt->rowCount() !== 1) {
+        $stmt->execute(['id' => $propertyId, 'owner' => $ownerHash]);
+        if ($stmt->rowCount() === 1) {
+            return;
+        }
+
+        // MySQL returns changed rows by default. An immediate heartbeat can write
+        // the same second-precision values and legitimately report zero changes.
+        $verify = $this->pdo->prepare(
+            'SELECT owner_hash, expires_at >= UTC_TIMESTAMP() AS is_active
+             FROM import_locks WHERE property_id = :id'
+        );
+        $verify->execute(['id' => $propertyId]);
+        $lock = $verify->fetch();
+        if (
+            !is_array($lock)
+            || !isset($lock['owner_hash'])
+            || !is_string($lock['owner_hash'])
+            || !hash_equals($lock['owner_hash'], $ownerHash)
+            || (int)($lock['is_active'] ?? 0) !== 1
+        ) {
             throw new RuntimeException('同期ロックの所有権を確認できません。');
         }
     }

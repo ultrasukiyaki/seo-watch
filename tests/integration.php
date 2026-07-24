@@ -6,6 +6,7 @@ use Tenyendama\SeoWatch\Auth;
 use Tenyendama\SeoWatch\AuthenticationAuditLogger;
 use Tenyendama\SeoWatch\AuthRateLimiter;
 use Tenyendama\SeoWatch\DisabledMailer;
+use Tenyendama\SeoWatch\ImportLockService;
 use Tenyendama\SeoWatch\SchemaManager;
 use Tenyendama\SeoWatch\UserActionTokenRepository;
 
@@ -89,6 +90,59 @@ $assert((bool)$pdo->query("SHOW TABLES LIKE 'settings'")->fetchColumn(), 'settin
 $legacy = $pdo->query("SELECT * FROM admins WHERE username = 'admin'")->fetch();
 $assert($legacy && $legacy['account_status'] === 'active', 'legacy account active');
 $assert(password_verify('legacy-password-123', (string)$legacy['password_hash']), 'legacy password preserved');
+
+$property = $pdo->prepare(
+    'INSERT INTO search_properties (site_url, site_hash, is_active) VALUES (:url, :hash, 1)'
+);
+$property->execute([
+    'url' => 'sc-domain:example.com',
+    'hash' => hash('sha256', 'sc-domain:example.com', true),
+]);
+$propertyId = (int)$pdo->lastInsertId();
+$locks = new ImportLockService($pdo, 300);
+$owner = $locks->acquire($propertyId, 'web');
+$storedOwnerHash = $pdo->query(
+    'SELECT owner_hash FROM import_locks WHERE property_id = ' . $propertyId
+)->fetchColumn();
+$assert(is_string($storedOwnerHash) && strlen($storedOwnerHash) === 64, 'lock owner hash is SHA-256 hex');
+$assert($storedOwnerHash === hash('sha256', $owner), 'raw lock owner is not stored');
+$noOp = $pdo->prepare(
+    'UPDATE import_locks SET heartbeat_at = heartbeat_at, expires_at = expires_at
+     WHERE property_id = :id AND owner_hash = :owner'
+);
+$noOp->execute(['id' => $propertyId, 'owner' => $storedOwnerHash]);
+$assert($noOp->rowCount() === 0, 'MySQL no-op update reports zero changed rows');
+$locks->heartbeat($propertyId, $owner);
+$locks->heartbeat($propertyId, $owner);
+try {
+    $locks->heartbeat($propertyId, 'different-owner');
+    $assert(false, 'different owner heartbeat rejected');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), '所有権'), 'different owner heartbeat rejected');
+}
+$assert(!$locks->release($propertyId, 'different-owner'), 'different owner release rejected');
+$pdo->exec(
+    'UPDATE import_locks SET heartbeat_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 10 MINUTE),
+     expires_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 SECOND)
+     WHERE property_id = ' . $propertyId
+);
+try {
+    $locks->heartbeat($propertyId, $owner);
+    $assert(false, 'expired owner heartbeat rejected');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), '所有権'), 'expired owner heartbeat rejected');
+}
+$replacementOwner = $locks->acquire($propertyId, 'cron');
+try {
+    $locks->heartbeat($propertyId, $owner);
+    $assert(false, 'stale owner heartbeat rejected after takeover');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), '所有権'), 'stale owner heartbeat rejected after takeover');
+}
+$assert(!$locks->release($propertyId, $owner), 'stale owner release rejected after takeover');
+$locks->heartbeat($propertyId, $replacementOwner);
+$assert($locks->release($propertyId, $replacementOwner), 'active owner release succeeds');
+$assert(!$locks->release($propertyId, $replacementOwner), 'missing lock release is idempotent');
 
 $_SESSION = [];
 $auth = new Auth($pdo);

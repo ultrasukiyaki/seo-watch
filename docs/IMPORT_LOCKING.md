@@ -4,6 +4,8 @@ Web、CLI、Cronは `import_locks` のDB leaseを共有します。共有サー�
 
 ロックはプロパティ単位で、所有者はSHA-256ハッシュのみ保存します。処理中はheartbeatで期限を延長し、正常・例外終了時に所有者一致を確認して解除します。期限切れleaseは次回取得またはmaintenance CLIで除去できます。内部所有者トークンは画面やログへ表示しません。
 
+heartbeatは更新行数だけで所有権を判定しません。同一秒に同じ値を更新してMySQLが変更行数0を返した場合は、同じDB接続でowner hashとDB UTC基準の期限を確認します。所有者が一致し期限内ならno-opとして継続し、不一致・欠損・期限切れの場合だけ同期を停止します。
+
 ## 状態と障害時の扱い
 
 同期履歴は `running`、`success`、`partial`、`failed`、`cancelled` を扱い、実行元、対象期間、heartbeat、件数、相関ID、利用者向けメッセージを保持できます。失敗は `oauth`、`google_api`、`network`、`database`、`rate_limit`、`validation`、`lock`、`unknown` に分類します。
