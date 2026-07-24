@@ -63,8 +63,15 @@ final class UserRepository
         }
         $email = EmailAddress::normalize($email);
         try {
-            $duplicate = $this->pdo->prepare('SELECT 1 FROM admins WHERE email = :email OR pending_email = :email LIMIT 1');
-            $duplicate->execute(['email' => $email]);
+            $duplicate = $this->pdo->prepare(
+                'SELECT 1 FROM admins
+                 WHERE LOWER(email) = :verified_email OR LOWER(pending_email) = :pending_email
+                 LIMIT 1'
+            );
+            $duplicate->execute([
+                'verified_email' => $email,
+                'pending_email' => $email,
+            ]);
             if ($duplicate->fetchColumn()) {
                 throw new RuntimeException('ユーザー名またはメールアドレスはすでに使用されています。');
             }

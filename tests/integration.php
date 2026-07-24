@@ -9,8 +9,11 @@ use Tenyendama\SeoWatch\DisabledMailer;
 use Tenyendama\SeoWatch\ImportLockService;
 use Tenyendama\SeoWatch\SchemaManager;
 use Tenyendama\SeoWatch\UserActionTokenRepository;
+use Tenyendama\SeoWatch\UserRepository;
+use Tenyendama\SeoWatch\Tests\FakeMailer;
 
 require_once dirname(__DIR__) . '/app/autoload.php';
+require_once __DIR__ . '/FakeMailer.php';
 ini_set('session.save_path', sys_get_temp_dir());
 session_start();
 
@@ -183,4 +186,96 @@ $recovery = new AccountRecoveryService($pdo, $tokens, new DisabledMailer(), $aud
 $issued = $recovery->issueResetForUser($viewerId, (int)$legacy['id']);
 $assert(str_starts_with($issued['url'], 'https://example.com/seo-watch/'), 'trusted reset base URL');
 
-fwrite(STDOUT, "PASS integration migrations, legacy login, tokens, rate limiting\n");
+$adminId = (int)$legacy['id'];
+try {
+    $recovery->requestEmailChange($adminId, 'wrong-password', 'admin@example.com');
+    $assert(false, 'wrong current password rejected');
+} catch (RuntimeException $e) {
+    $assert($e->getMessage() === '現在のパスワードが違います。', 'wrong current password message');
+}
+$assert($pdo->query("SELECT pending_email FROM admins WHERE id = {$adminId}")->fetchColumn() === null, 'wrong password does not save pending email');
+
+$recovery->requestEmailChange($adminId, 'legacy-password-123', ' Admin@Example.COM ');
+$assert($pdo->query("SELECT pending_email FROM admins WHERE id = {$adminId}")->fetchColumn() === 'admin@example.com', 'disabled delivery saves normalized pending email');
+$assert((int)$pdo->query(
+    "SELECT COUNT(*) FROM user_action_tokens WHERE user_id = {$adminId} AND purpose = 'email_verification' AND used_at IS NULL"
+)->fetchColumn() === 0, 'disabled delivery does not issue unusable verification token');
+$recovery->requestEmailChange($adminId, 'legacy-password-123', 'ADMIN@example.com');
+
+$otherVerified = $pdo->prepare(
+    "INSERT INTO admins (username, password_hash, role, email, email_verified_at)
+     VALUES ('verified-user', :hash, 'viewer', 'taken@example.com', CURRENT_TIMESTAMP)"
+);
+$otherVerified->execute(['hash' => password_hash('verified-password-123', PASSWORD_DEFAULT)]);
+$otherPending = $pdo->prepare(
+    "INSERT INTO admins (username, password_hash, role, pending_email)
+     VALUES ('pending-user', :hash, 'viewer', 'waiting@example.com')"
+);
+$otherPending->execute(['hash' => password_hash('pending-password-123', PASSWORD_DEFAULT)]);
+foreach ([' TAKEN@EXAMPLE.COM ', ' Waiting@Example.com '] as $duplicateEmail) {
+    try {
+        $recovery->requestEmailChange($adminId, 'legacy-password-123', $duplicateEmail);
+        $assert(false, 'other user duplicate email rejected');
+    } catch (RuntimeException $e) {
+        $assert(str_contains($e->getMessage(), 'すでに使用'), 'duplicate email message');
+    }
+}
+
+$users = new UserRepository($pdo);
+try {
+    $users->createInvitation('duplicate-invite', ' TAKEN@EXAMPLE.COM ');
+    $assert(false, 'invitation rejects verified email duplicate');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'すでに使用'), 'invitation verified duplicate message');
+}
+try {
+    $users->createInvitation('duplicate-pending-invite', ' WAITING@example.com ');
+    $assert(false, 'invitation rejects pending email duplicate');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'すでに使用'), 'invitation pending duplicate message');
+}
+
+$fakeMailer = new FakeMailer();
+$mailRecovery = new AccountRecoveryService($pdo, $tokens, $fakeMailer, $audit, 'https://example.com/seo-watch');
+$mailRecovery->requestEmailChange($adminId, 'legacy-password-123', 'deliver@example.com');
+$assert(count($fakeMailer->messages) === 1, 'enabled fake transport sends verification mail');
+$firstVerificationHash = $pdo->query(
+    "SELECT token_hash FROM user_action_tokens
+     WHERE user_id = {$adminId} AND purpose = 'email_verification' AND used_at IS NULL"
+)->fetchColumn();
+$assert(is_string($firstVerificationHash) && strlen($firstVerificationHash) === 64, 'verification token stored as hash');
+$assert($mailRecovery->sendEmailVerification($adminId), 'verification resend succeeds');
+$assert(count($fakeMailer->messages) === 2, 'verification resend uses fake transport');
+$assert((int)$pdo->query(
+    "SELECT COUNT(*) FROM user_action_tokens
+     WHERE user_id = {$adminId} AND purpose = 'email_verification'
+       AND token_hash = " . $pdo->quote((string)$firstVerificationHash) . " AND used_at IS NOT NULL"
+)->fetchColumn() === 1, 'verification resend invalidates old token');
+$mailRecovery->cancelPendingEmail($adminId);
+$assert($pdo->query("SELECT pending_email FROM admins WHERE id = {$adminId}")->fetchColumn() === null, 'pending email cancellation clears value');
+$assert((int)$pdo->query(
+    "SELECT COUNT(*) FROM user_action_tokens
+     WHERE user_id = {$adminId} AND purpose = 'email_verification' AND used_at IS NULL"
+)->fetchColumn() === 0, 'pending email cancellation invalidates token');
+
+$fakeMailer->sendResult = false;
+$mailRecovery->requestEmailChange($adminId, 'legacy-password-123', 'send-failed@example.com');
+$assert($pdo->query("SELECT pending_email FROM admins WHERE id = {$adminId}")->fetchColumn() === 'send-failed@example.com', 'send failure preserves pending email');
+$assert((int)$pdo->query(
+    "SELECT COUNT(*) FROM user_action_tokens
+     WHERE user_id = {$adminId} AND purpose = 'email_verification' AND used_at IS NULL"
+)->fetchColumn() === 1, 'send failure preserves verification token for retry');
+$mailRecovery->cancelPendingEmail($adminId);
+
+$fakeMailer->sendResult = true;
+$mailRecovery->requestEmailChange($adminId, 'legacy-password-123', 'confirmed@example.com');
+$verificationMessage = $fakeMailer->messages[array_key_last($fakeMailer->messages)];
+preg_match('/[?&]token=([a-f0-9]{64})/', $verificationMessage['body'], $tokenMatch);
+$assert(isset($tokenMatch[1]), 'fake verification mail contains token URL');
+$assert($mailRecovery->verifyEmail($tokenMatch[1]), 'email verification completes');
+$verifiedAccount = $pdo->query("SELECT email, pending_email, email_verified_at FROM admins WHERE id = {$adminId}")->fetch();
+$assert($verifiedAccount['email'] === 'confirmed@example.com', 'verified email promoted');
+$assert($verifiedAccount['pending_email'] === null, 'verified pending email cleared');
+$assert($verifiedAccount['email_verified_at'] !== null, 'verified timestamp stored');
+
+fwrite(STDOUT, "PASS integration migrations, login, tokens, email hotfix, rate limiting\n");

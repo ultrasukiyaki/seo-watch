@@ -105,6 +105,25 @@ $test('password reset only uses verified email', function () use ($assert): void
     $source = file_get_contents(dirname(__DIR__) . '/app/AccountRecoveryService.php');
     $assert(is_string($source) && substr_count($source, 'email_verified_at IS NOT NULL') >= 2);
 });
+$test('email duplicate queries use unique native placeholders', function () use ($assert): void {
+    foreach (['AccountRecoveryService.php', 'UserRepository.php'] as $file) {
+        $source = file_get_contents(dirname(__DIR__) . '/app/' . $file);
+        $assert(is_string($source), $file);
+        $assert(!str_contains($source, 'email = :email OR pending_email = :email'), $file);
+    }
+    $service = file_get_contents(dirname(__DIR__) . '/app/AccountRecoveryService.php');
+    $assert(is_string($service) && str_contains($service, 'id <> :current_user_id'));
+    $assert(is_string($service) && str_contains($service, 'LOWER(email) = :verified_email'));
+    $assert(is_string($service) && str_contains($service, 'LOWER(pending_email) = :pending_email'));
+    $assert(is_string($service) && str_contains($service, "'current_user_id' => \$userId"));
+    $assert(is_string($service) && str_contains($service, "'verified_email' => \$newEmail"));
+    $assert(is_string($service) && str_contains($service, "'pending_email' => \$newEmail"));
+});
+$test('email PDO failures use a safe user message', function () use ($assert): void {
+    $source = file_get_contents(dirname(__DIR__) . '/app/AccountRecoveryService.php');
+    $assert(is_string($source) && str_contains($source, "'operation' => 'account_email_change'"));
+    $assert(is_string($source) && str_contains($source, 'メールアドレスを保存できませんでした。'));
+});
 $test('reset pages use protective headers', function () use ($assert): void {
     $source = file_get_contents(dirname(__DIR__) . '/index.php');
     foreach (['Cache-Control: no-store', 'Referrer-Policy: no-referrer', 'X-Robots-Tag: noindex, nofollow'] as $header) {
