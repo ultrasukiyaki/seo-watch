@@ -12,6 +12,8 @@ use Tenyendama\SeoWatch\SearchConsoleDate;
 use Tenyendama\SeoWatch\TimezoneService;
 use Tenyendama\SeoWatch\MailFormatter;
 use Tenyendama\SeoWatch\MailMessage;
+use Tenyendama\SeoWatch\AlertRuleEvaluator;
+use Tenyendama\SeoWatch\AlertRepository;
 
 require_once dirname(__DIR__) . '/app/autoload.php';
 
@@ -191,6 +193,76 @@ $test('sync lease verifies ownership after a no-op heartbeat', function () use (
     $assert(is_string($source) && str_contains($source, 'expires_at >= UTC_TIMESTAMP() AS is_active'));
     $assert(is_string($source) && str_contains($source, 'AND expires_at >= UTC_TIMESTAMP()'));
     $assert(is_string($source) && !str_contains($source, 'MYSQL_ATTR_FOUND_ROWS'));
+});
+$test('alert ranking directions and exact thresholds', function () use ($assert): void {
+    $evaluator = new AlertRuleEvaluator();
+    $base = [
+        'minimum_impressions' => 100, 'minimum_clicks' => 0, 'absolute_change_threshold' => 0,
+        'relative_change_threshold' => 0, 'ctr_point_threshold' => 0,
+        'position_change_threshold' => 3, 'rank_threshold' => null,
+    ];
+    $metrics = [
+        'previous_clicks' => 10, 'current_clicks' => 10,
+        'previous_impressions' => 100, 'current_impressions' => 100,
+        'previous_position_weight' => 500, 'current_position_weight' => 800,
+    ];
+    $assert($evaluator->evaluate(['rule_key' => 'ranking_drop'] + $base, $metrics) !== null);
+    $assert($evaluator->evaluate(['rule_key' => 'ranking_gain'] + $base, $metrics) === null);
+});
+$test('alert CTR uses period totals and avoids zero division', function () use ($assert): void {
+    $evaluator = new AlertRuleEvaluator();
+    $rule = [
+        'rule_key' => 'ctr_drop', 'minimum_impressions' => 100, 'minimum_clicks' => 0,
+        'absolute_change_threshold' => 0, 'relative_change_threshold' => 0,
+        'ctr_point_threshold' => 0.02, 'position_change_threshold' => 0, 'rank_threshold' => null,
+    ];
+    $metrics = [
+        'previous_clicks' => 10, 'current_clicks' => 5,
+        'previous_impressions' => 100, 'current_impressions' => 100,
+        'previous_position_weight' => 500, 'current_position_weight' => 500,
+    ];
+    $result = $evaluator->evaluate($rule, $metrics);
+    $assert($result !== null && abs($result['previous_ctr'] - 0.1) < 0.000001);
+    $metrics['previous_impressions'] = 0;
+    $assert($evaluator->evaluate($rule, $metrics) === null);
+});
+$test('alert click gain handles a zero previous period', function () use ($assert): void {
+    $evaluator = new AlertRuleEvaluator();
+    $rule = [
+        'rule_key' => 'clicks_gain', 'minimum_impressions' => 0, 'minimum_clicks' => 0,
+        'absolute_change_threshold' => 5, 'relative_change_threshold' => 0.3,
+        'ctr_point_threshold' => 0, 'position_change_threshold' => 0, 'rank_threshold' => null,
+    ];
+    $metrics = [
+        'previous_clicks' => 0, 'current_clicks' => 5,
+        'previous_impressions' => 0, 'current_impressions' => 100,
+        'previous_position_weight' => 0, 'current_position_weight' => 500,
+    ];
+    $assert($evaluator->evaluate($rule, $metrics) !== null);
+});
+$test('alert routes enforce server-side roles', function () use ($assert): void {
+    foreach (['alerts/detect', 'alerts/rules', 'alerts/rules/save', 'alerts/rules/reset', 'alerts/runs', 'alerts/task'] as $route) {
+        $assert(RoutePolicy::requiresSuperuser($route), $route);
+    }
+    $assert(!RoutePolicy::requiresSuperuser('alerts'));
+    $assert(!RoutePolicy::requiresSuperuser('alerts/state'));
+});
+$test('alert periods cross months, years and leap day without timezone shifts', function () use ($assert): void {
+    $repository = (new ReflectionClass(AlertRepository::class))->newInstanceWithoutConstructor();
+    $leap = $repository->ranges('2024-03-03', 7);
+    $assert($leap === [
+        'current_end' => '2024-03-03', 'current_start' => '2024-02-26',
+        'previous_end' => '2024-02-25', 'previous_start' => '2024-02-19',
+    ]);
+    $year = $repository->ranges('2026-01-03', 28);
+    $assert($year['current_start'] === '2025-12-07');
+    $assert($year['previous_start'] === '2025-11-09');
+    try {
+        $repository->ranges('2026-02-30', 7);
+        $assert(false, 'invalid date accepted');
+    } catch (RuntimeException) {
+        $assert(true);
+    }
 });
 
 $failed = 0;
