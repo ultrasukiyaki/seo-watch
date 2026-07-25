@@ -10,7 +10,7 @@ $loggedIn = isset($auth) && $auth->check();
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title><?=View::e($title ?? '')?> | <?=View::e($appName ?? '10yendama SEO Watch')?></title>
-<link rel="stylesheet" href="assets/app.css?v=0.11.1">
+<link rel="stylesheet" href="assets/app.css?v=0.12.0">
 </head>
 <body>
 <?php if ($loggedIn): ?>
@@ -21,6 +21,7 @@ $loggedIn = isset($auth) && $auth->check();
             <a class="<?=($route ?? '') === 'dashboard' ? 'active' : ''?>" href="index.php?r=dashboard">📊 ダッシュボード</a>
             <a class="<?=($route ?? '') === 'opportunities' ? 'active' : ''?>" href="index.php?r=opportunities">🚀 伸びしろ</a>
             <a class="<?=str_starts_with(($route ?? ''), 'improvements') ? 'active' : ''?>" href="index.php?r=improvements">✅ 改善管理</a>
+            <a class="<?=str_starts_with(($route ?? ''), 'alerts') ? 'active' : ''?>" href="index.php?r=alerts">🔔 変動通知</a>
             <a class="<?=($route ?? '') === 'queries' ? 'active' : ''?>" href="index.php?r=queries">🔎 検索語</a>
             <a class="<?=in_array(($route ?? ''), ['pages', 'page-detail'], true) ? 'active' : ''?>" href="index.php?r=pages">📄 ページ</a>
             <a class="<?=($route ?? '') === 'account' ? 'active' : ''?>" href="index.php?r=account">👤 アカウント</a>
@@ -28,6 +29,8 @@ $loggedIn = isset($auth) && $auth->check();
             <a class="<?=($route ?? '') === 'users' ? 'active' : ''?>" href="index.php?r=users">👥 ユーザー管理</a>
             <a class="<?=($route ?? '') === 'audit' ? 'active' : ''?>" href="index.php?r=audit">🛡️ 認証監査</a>
             <a class="<?=($route ?? '') === 'settings' ? 'active' : ''?>" href="index.php?r=settings">⚙️ 設定</a>
+            <a href="index.php?r=alerts/rules">📐 通知ルール</a>
+            <a href="index.php?r=alerts/runs">🕘 検知履歴</a>
             <?php endif; ?>
         </nav>
         <div class="sidebar-bottom">
@@ -55,6 +58,6 @@ $loggedIn = isset($auth) && $auth->check();
     <?=$content?>
     <?php require __DIR__ . '/partials/footer.php'; ?>
 <?php endif; ?>
-<script src="assets/app.js?v=0.11.1" defer></script>
+<script src="assets/app.js?v=0.12.0" defer></script>
 </body>
 </html>

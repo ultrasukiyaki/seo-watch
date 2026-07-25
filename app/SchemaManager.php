@@ -35,6 +35,15 @@ final class SchemaManager
                 throw $e;
             }
         }
+        if ($this->startMigration('20260726_001_v012_alerts', hash('sha256', 'seo-watch-v0.12.0-alert-schema-v1'))) {
+            try {
+                $this->migrateAlerts();
+                $this->finishMigration('20260726_001_v012_alerts', 'applied', null);
+            } catch (\Throwable $e) {
+                $this->finishMigration('20260726_001_v012_alerts', 'failed', '変動通知DBスキーマ更新に失敗しました。');
+                throw $e;
+            }
+        }
 
         $this->ensureColumn(
             'search_performance',
@@ -138,14 +147,18 @@ SQL);
                 throw new \RuntimeException('別のマイグレーション処理が実行中です。');
             }
         }
+        $appVersion = trim((string)file_get_contents(dirname(__DIR__) . '/VERSION'));
         $upsert = $this->pdo->prepare(
             'INSERT INTO schema_migrations
              (migration_id, checksum, started_at, applied_at, status, error_summary, app_version)
-             VALUES (:id, :checksum, UTC_TIMESTAMP(), NULL, "running", NULL, "0.10.0")
+             VALUES (:id, :checksum, UTC_TIMESTAMP(), NULL, "running", NULL, :app_version_insert)
              ON DUPLICATE KEY UPDATE started_at = UTC_TIMESTAMP(), applied_at = NULL,
-             status = "running", error_summary = NULL, app_version = "0.10.0"'
+             status = "running", error_summary = NULL, app_version = :app_version_update'
         );
-        $upsert->execute(['id' => $id, 'checksum' => $checksum]);
+        $upsert->execute([
+            'id' => $id, 'checksum' => $checksum,
+            'app_version_insert' => $appVersion, 'app_version_update' => $appVersion,
+        ]);
         return true;
     }
 
@@ -425,6 +438,20 @@ CREATE TABLE IF NOT EXISTS mail_delivery_logs (
     KEY idx_mail_delivery_correlation (correlation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
+    }
+
+    private function migrateAlerts(): void
+    {
+        $schema = file_get_contents(dirname(__DIR__) . '/database/alerts.sql');
+        if (!is_string($schema)) {
+            throw new \RuntimeException('変動通知スキーマを読み込めません。');
+        }
+        foreach (preg_split('/;\s*(?:\r?\n|$)/', $schema) ?: [] as $statement) {
+            $statement = trim($statement);
+            if ($statement !== '') {
+                $this->pdo->exec($statement);
+            }
+        }
     }
 
     private function ensureColumn(string $table, string $column, string $alterSql): void

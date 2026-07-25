@@ -37,6 +37,11 @@ use Tenyendama\SeoWatch\TimezoneService;
 use Tenyendama\SeoWatch\ImportLockService;
 use Tenyendama\SeoWatch\ImprovementTaskRepository;
 use Tenyendama\SeoWatch\EffectComparisonService;
+use Tenyendama\SeoWatch\AlertRepository;
+use Tenyendama\SeoWatch\AlertRuleEvaluator;
+use Tenyendama\SeoWatch\AlertLockService;
+use Tenyendama\SeoWatch\AlertDetectionService;
+use Tenyendama\SeoWatch\AlertDeliveryService;
 
 require_once __DIR__ . '/autoload.php';
 
@@ -93,6 +98,9 @@ $importLocks = new ImportLockService($pdo);
 $importer = new Importer($pdo, $api, $urlNormalizer, $importLocks);
 $improvementTasks = new ImprovementTaskRepository($pdo, $urlNormalizer);
 $effectComparison = new EffectComparisonService($pdo);
+$alertRepository = new AlertRepository($pdo);
+$alertLocks = new AlertLockService($pdo);
+$alertDetection = new AlertDetectionService($alertRepository, new AlertRuleEvaluator(), $alertLocks);
 $analytics = new AnalyticsRepository($pdo, new OpportunityScorer());
 $dataMaintenance = new DataMaintenance($pdo, $urlNormalizer);
 $pageMetadata = new PageMetadataRepository($pdo);
@@ -113,6 +121,12 @@ $accountRecovery = new AccountRecoveryService(
     $audit,
     (string)$config->get('app.base_url'),
     $dateTime
+);
+$alertDelivery = new AlertDeliveryService(
+    $pdo,
+    $mailer,
+    (string)$config->get('app.base_url'),
+    $dateTime->timezoneName()
 );
 $auth = new Auth($pdo, $audit);
 $userRepo = new UserRepository($pdo);
@@ -149,5 +163,9 @@ return compact(
     'effectComparison',
     'dateTime',
     'searchConsoleDate',
-    'displayTimezoneConfirmed'
+    'displayTimezoneConfirmed',
+    'alertRepository',
+    'alertLocks',
+    'alertDetection',
+    'alertDelivery'
 );

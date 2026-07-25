@@ -1,6 +1,6 @@
 # Cronによる定期取得
 
-Search Consoleデータを毎日自動取得するには、`bin/import.php` をCronから実行します。
+Search Consoleデータを毎日自動取得し、変動検知とダイジェストを行うには、同期・検知・配送をこの順でCronから実行します。
 
 ## 最小構成
 
@@ -8,6 +8,8 @@ Search Consoleデータを毎日自動取得するには、`bin/import.php` をC
 
 ```cron
 15 4 * * * /usr/bin/php /home/example/public_html/seo-watch/bin/import.php --days=3
+30 4 * * * /usr/bin/php /home/example/public_html/seo-watch/bin/detect-alerts.php
+*/15 * * * * /usr/bin/php /home/example/public_html/seo-watch/bin/send-alert-digest.php
 ```
 
 この例では毎日4時15分に直近3日分を再取得します。既存行は更新されるため、数日分を重ねて取得しても重複しません。
@@ -68,6 +70,8 @@ Cronへ登録する前に、同じコマンドを手動実行してください�
 ```bash
 php bin/doctor.php
 php bin/import.php --days=3
+php bin/detect-alerts.php --dry-run
+php bin/send-alert-digest.php --dry-run
 ```
 
 主な失敗原因:

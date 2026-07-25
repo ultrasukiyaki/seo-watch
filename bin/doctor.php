@@ -30,6 +30,14 @@ if (!$failed) {
         printf("[INFO] UTC now: %s\n", $dateTime->isoUtc($dateTime->nowUtc()));
         printf("[INFO] Display now: %s\n", $dateTime->detail($dateTime->nowUtc()));
         printf("[OK] Search Console timezone/date: %s / %s\n", \Tenyendama\SeoWatch\SearchConsoleDate::TIMEZONE, $searchConsoleDate->today());
+        $ruleCounts = $pdo->query('SELECT COUNT(*) total, SUM(enabled=1) enabled FROM alert_rules')->fetch();
+        printf("[INFO] Alert rules: %d total / %d enabled\n", (int)$ruleCounts['total'], (int)$ruleCounts['enabled']);
+        $lastAlertRun = $pdo->query('SELECT started_at,status FROM alert_detection_runs ORDER BY id DESC LIMIT 1')->fetch();
+        printf("[INFO] Last alert detection: %s / %s\n", $lastAlertRun['started_at'] ?? 'never', $lastAlertRun['status'] ?? '-');
+        printf("[%s] Alert email/digest: transport=%s\n", $mailer->enabled() ? 'OK' : 'WARN', $mailSettingsData['transport']);
+        $latestSearchDate = $pdo->query('SELECT MAX(data_date) FROM search_performance')->fetchColumn();
+        printf("[INFO] Latest Search Console date (PT DATE): %s\n", $latestSearchDate ?: 'none');
+        echo "[INFO] Cron: import -> detect-alerts.php -> send-alert-digest.php\n";
     } catch (Throwable $e) {
         echo "[NG] Bootstrap: {$e->getMessage()}\n";
         $failed = true;

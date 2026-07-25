@@ -144,6 +144,8 @@ use Tenyendama\SeoWatch\View;
         <div><strong>Web PHP実行ファイル</strong><p><?=View::e($cliPhpPath)?></p></div>
         <div><strong>アプリケーションパス</strong><p><?=View::e($appRootPath)?></p></div>
         <div><strong>推奨Cronコマンド</strong><pre><?=View::e($cronImportCommand)?></pre></div>
+        <div><strong>変動検知（同期完了後）</strong><pre><?=View::e($cronAlertCommand)?></pre></div>
+        <div><strong>日次ダイジェスト</strong><pre><?=View::e($cronDigestCommand)?></pre></div>
         <div><strong>ラッパー利用例</strong><pre><?=View::e($cronWrapperCommand)?></pre></div>
         <div><strong>最終データ取得</strong><p><?=$lastRun ? $dateTime->time($lastRun['started_at'], false) . '（' . View::e($lastRun['start_date']) . '〜' . View::e($lastRun['end_date']) . '、PT）' : 'データ取得履歴がありません。'?></p></div>
     </div>

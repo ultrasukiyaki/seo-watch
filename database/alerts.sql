@@ -1,0 +1,186 @@
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    rule_key VARCHAR(64) NOT NULL,
+    name VARCHAR(190) NOT NULL,
+    description TEXT NULL,
+    subject_type VARCHAR(20) NOT NULL,
+    comparison_days TINYINT UNSIGNED NOT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    severity VARCHAR(16) NOT NULL DEFAULT 'warning',
+    minimum_impressions BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    minimum_clicks BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    absolute_change_threshold DECIMAL(16,4) NOT NULL DEFAULT 0,
+    relative_change_threshold DECIMAL(10,6) NOT NULL DEFAULT 0,
+    ctr_point_threshold DECIMAL(10,6) NOT NULL DEFAULT 0,
+    position_change_threshold DECIMAL(10,4) NOT NULL DEFAULT 0,
+    rank_threshold DECIMAL(10,4) NULL,
+    maximum_ctr DECIMAL(10,6) NULL,
+    minimum_position DECIMAL(10,4) NULL,
+    cooldown_days SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    sort_order SMALLINT NOT NULL DEFAULT 0,
+    is_system TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by_user_id BIGINT UNSIGNED NULL,
+    UNIQUE KEY uq_alert_rule_key (rule_key),
+    KEY idx_alert_rules_enabled_sort (enabled, sort_order),
+    CONSTRAINT fk_alert_rule_actor FOREIGN KEY (updated_by_user_id) REFERENCES admins(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS alert_detection_runs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    property_id BIGINT UNSIGNED NOT NULL,
+    started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME NULL,
+    status VARCHAR(24) NOT NULL DEFAULT 'running',
+    trigger_type VARCHAR(16) NOT NULL,
+    requested_by_user_id BIGINT UNSIGNED NULL,
+    as_of_date DATE NULL,
+    rules_evaluated INT UNSIGNED NOT NULL DEFAULT 0,
+    subjects_evaluated BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    alerts_created BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    alerts_updated BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    occurrences_created BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    suppressed_by_cooldown BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    skipped_insufficient_data INT UNSIGNED NOT NULL DEFAULT 0,
+    errors_count INT UNSIGNED NOT NULL DEFAULT 0,
+    safe_error_summary VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_alert_runs_property_started (property_id, started_at),
+    KEY idx_alert_runs_status (status),
+    CONSTRAINT fk_alert_run_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    CONSTRAINT fk_alert_run_actor FOREIGN KEY (requested_by_user_id) REFERENCES admins(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    property_id BIGINT UNSIGNED NOT NULL,
+    rule_id BIGINT UNSIGNED NOT NULL,
+    subject_type VARCHAR(20) NOT NULL,
+    normalized_page_url TEXT NOT NULL,
+    query_text VARCHAR(1000) NULL,
+    subject_hash BINARY(32) NOT NULL,
+    severity VARCHAR(16) NOT NULL,
+    first_detected_at DATETIME NOT NULL,
+    last_detected_at DATETIME NOT NULL,
+    occurrence_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    latest_occurrence_id BIGINT UNSIGNED NULL,
+    global_status VARCHAR(20) NOT NULL DEFAULT 'active',
+    improvement_task_id BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_alert_subject (property_id, rule_id, subject_hash),
+    UNIQUE KEY uq_alert_improvement_task (improvement_task_id),
+    KEY idx_alert_property_last (property_id, last_detected_at),
+    KEY idx_alert_severity (severity),
+    KEY idx_alert_subject_hash (subject_hash),
+    CONSTRAINT fk_alert_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE,
+    CONSTRAINT fk_alert_rule FOREIGN KEY (rule_id) REFERENCES alert_rules(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_alert_task FOREIGN KEY (improvement_task_id) REFERENCES improvement_tasks(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS alert_occurrences (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    alert_id BIGINT UNSIGNED NOT NULL,
+    detection_run_id BIGINT UNSIGNED NOT NULL,
+    detected_for_date DATE NOT NULL,
+    comparison_days TINYINT UNSIGNED NOT NULL,
+    previous_start_date DATE NOT NULL,
+    previous_end_date DATE NOT NULL,
+    current_start_date DATE NOT NULL,
+    current_end_date DATE NOT NULL,
+    previous_clicks DECIMAL(18,4) NOT NULL,
+    current_clicks DECIMAL(18,4) NOT NULL,
+    previous_impressions DECIMAL(18,4) NOT NULL,
+    current_impressions DECIMAL(18,4) NOT NULL,
+    previous_ctr DECIMAL(14,10) NULL,
+    current_ctr DECIMAL(14,10) NULL,
+    previous_position DECIMAL(14,6) NULL,
+    current_position DECIMAL(14,6) NULL,
+    absolute_delta DECIMAL(18,8) NULL,
+    relative_delta DECIMAL(18,8) NULL,
+    threshold_snapshot LONGTEXT NOT NULL,
+    explanation_snapshot TEXT NOT NULL,
+    email_eligible TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_alert_occurrence_period (alert_id, detected_for_date, comparison_days),
+    KEY idx_occurrence_run (detection_run_id),
+    KEY idx_occurrence_date (detected_for_date),
+    CONSTRAINT fk_occurrence_alert FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_occurrence_run FOREIGN KEY (detection_run_id) REFERENCES alert_detection_runs(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS alert_user_states (
+    alert_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    read_at DATETIME NULL,
+    hidden_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (alert_id, user_id),
+    KEY idx_alert_state_user_read (user_id, read_at),
+    KEY idx_alert_state_user_hidden (user_id, hidden_at),
+    CONSTRAINT fk_alert_state_alert FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_alert_state_user FOREIGN KEY (user_id) REFERENCES admins(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_notification_preferences (
+    user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    in_app_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    email_enabled TINYINT(1) NOT NULL DEFAULT 0,
+    delivery_mode VARCHAR(20) NOT NULL DEFAULT 'none',
+    minimum_severity VARCHAR(16) NOT NULL DEFAULT 'info',
+    enabled_rule_types TEXT NULL,
+    digest_time TIME NOT NULL DEFAULT '08:00:00',
+    last_digest_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notification_preference_user FOREIGN KEY (user_id) REFERENCES admins(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS alert_deliveries (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    alert_id BIGINT UNSIGNED NOT NULL,
+    occurrence_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    delivery_mode VARCHAR(20) NOT NULL,
+    delivery_batch_key VARCHAR(190) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    attempted_at DATETIME NULL,
+    sent_at DATETIME NULL,
+    failed_at DATETIME NULL,
+    safe_error_code VARCHAR(32) NULL,
+    safe_error_message VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_alert_delivery (delivery_batch_key, alert_id, occurrence_id, user_id),
+    KEY idx_alert_delivery_status (status, created_at),
+    KEY idx_alert_delivery_user (user_id, created_at),
+    CONSTRAINT fk_alert_delivery_alert FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE,
+    CONSTRAINT fk_alert_delivery_occurrence FOREIGN KEY (occurrence_id) REFERENCES alert_occurrences(id) ON DELETE CASCADE,
+    CONSTRAINT fk_alert_delivery_user FOREIGN KEY (user_id) REFERENCES admins(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS alert_locks (
+    property_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    owner_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    source VARCHAR(16) NOT NULL,
+    acquired_at DATETIME NOT NULL,
+    heartbeat_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    KEY idx_alert_lock_expiry (expires_at),
+    CONSTRAINT fk_alert_lock_property FOREIGN KEY (property_id) REFERENCES search_properties(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO alert_rules
+    (rule_key,name,description,subject_type,comparison_days,enabled,severity,minimum_impressions,minimum_clicks,absolute_change_threshold,relative_change_threshold,ctr_point_threshold,position_change_threshold,rank_threshold,maximum_ctr,minimum_position,cooldown_days,sort_order,is_system)
+VALUES
+('ranking_drop','掲載順位下落','平均掲載順位が大きく悪化しました。','page_query',7,1,'warning',100,0,0,0,0,3,NULL,NULL,NULL,7,10,1),
+('ranking_gain','掲載順位上昇','平均掲載順位が大きく改善しました。','page_query',7,1,'info',100,0,0,0,0,3,NULL,NULL,NULL,7,20,1),
+('clicks_drop','クリック数急減','クリック数が大きく減少しました。','page',7,1,'critical',0,10,5,0.3,0,0,NULL,NULL,NULL,7,30,1),
+('clicks_gain','クリック数急増','クリック数が大きく増加しました。','page',7,1,'info',0,0,5,0.3,0,0,NULL,NULL,NULL,7,40,1),
+('impressions_drop','表示回数急減','表示回数が大きく減少しました。','page',7,1,'warning',100,0,100,0.3,0,0,NULL,NULL,NULL,7,50,1),
+('impressions_gain','表示回数急増','表示回数が大きく増加しました。','page',7,1,'info',100,0,100,0.3,0,0,NULL,NULL,NULL,7,60,1),
+('ctr_drop','CTR低下','期間合計から再計算したCTRが低下しました。','page_query',7,1,'warning',100,0,0,0,0.02,0,NULL,NULL,NULL,7,70,1),
+('low_ctr_opportunity','低CTR改善候補','上位表示かつ表示回数が多い一方でCTRが低い候補です。順位別の一般的CTRを保証するものではありません。','page_query',28,0,'info',200,0,0,0,0,0,10,0.02,1,14,80,1),
+('entered_rank_threshold','10位以内へ進入','設定順位以内へ新たに進入しました。','page_query',7,1,'info',50,0,0,0,0,0,10,NULL,NULL,7,90,1),
+('left_rank_threshold','10位以内から離脱','設定順位以内から離脱しました。','page_query',7,1,'warning',50,0,0,0,0,0,10,NULL,NULL,7,100,1)

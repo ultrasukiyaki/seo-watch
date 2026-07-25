@@ -1,6 +1,6 @@
 # 10yendama SEO Watch
 
-現在のバージョンはv0.11.1です。v0.11.1では、管理者メールの追加・変更時にMySQLのネイティブプリペアドでPDOエラーが発生する問題を修正しました。
+現在のバージョンはv0.12.0です。Search Consoleの掲載順位・クリック数・表示回数・CTRの重要な変化を、説明可能なルールで検知する「変動通知」を追加しました。通知センター、改善タスク連携、即時メール、日次ダイジェスト、CLI・Cronに対応します。
 
 メール設定は[メール配送ガイド](docs/MAIL.md)と[SMTP設定](docs/SMTP.md)を参照してください。
 
@@ -63,6 +63,7 @@ ComposerやNode.jsは不要です。
 - [Google OAuth / Search Console API設定](GOOGLE_OAUTH_SETUP.md)
 - [インストール手順](docs/INSTALL.md)
 - [Cronによる定期取得](docs/CRON.md)
+- [Search Performance Alerts](docs/ALERTS.md)
 - [heteml向け補足](docs/HETEML.md)
 - [アップデート手順](docs/UPGRADING.md)
 - [アカウント回復・認証運用](docs/ACCOUNT_RECOVERY.md)

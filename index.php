@@ -580,6 +580,118 @@ try {
         'dateTime' => $dateTime,
     ];
 
+    if ($route === 'alerts/state') {
+        postOnly();
+        if (!$activeProperty) {
+            throw new RuntimeException('先に分析対象プロパティを選んでください。');
+        }
+        $alertRepository->setUserState((int)($_POST['alert_id'] ?? 0), (int)$currentUser['id'], (string)($_POST['action'] ?? ''), (int)$activeProperty['id']);
+        redirectTo('alerts');
+    }
+
+    if ($route === 'alerts/preferences') {
+        postOnly();
+        $account = $userRepo->find((int)$currentUser['id']);
+        try {
+            $alertRepository->savePreference(
+                (int)$currentUser['id'],
+                $_POST,
+                !empty($account['email']) && !empty($account['email_verified_at'])
+            );
+            $audit->log('alert_preferences_updated', 'success', (int)$currentUser['id'], (int)$currentUser['id']);
+            flash('success', '変動通知設定を保存しました。');
+        } catch (RuntimeException $e) {
+            flash('danger', $e->getMessage());
+        }
+        redirectTo('account');
+    }
+
+    if ($route === 'alerts/detect') {
+        postOnly();
+        if (!$activeProperty) {
+            throw new RuntimeException('先に分析対象プロパティを選んでください。');
+        }
+        $result = $alertDetection->detect((int)$activeProperty['id'], 'web', (int)$currentUser['id']);
+        if ((int)($result['run_id'] ?? 0) > 0) {
+            $alertDelivery->sendImmediate((int)$result['run_id']);
+        }
+        $audit->log('alert_detection_requested', 'success', (int)$currentUser['id'], null, ['status' => $result['status']]);
+        flash($result['status'] === 'success' ? 'success' : 'warning', '変動検知: ' . $result['status']);
+        redirectTo('alerts/runs');
+    }
+
+    if ($route === 'alerts/rules/save') {
+        postOnly();
+        try {
+            $alertRepository->saveRule((int)($_POST['rule_id'] ?? 0), $_POST, (int)$currentUser['id']);
+            $audit->log('alert_rule_updated', 'success', (int)$currentUser['id'], null, ['rule_id' => (int)($_POST['rule_id'] ?? 0)]);
+            flash('success', '変動通知ルールを保存しました。');
+        } catch (RuntimeException $e) {
+            flash('danger', $e->getMessage());
+        }
+        redirectTo('alerts/rules');
+    }
+
+    if ($route === 'alerts/rules/reset') {
+        postOnly();
+        $alertRepository->resetRule((int)($_POST['rule_id'] ?? 0), (int)$currentUser['id']);
+        $audit->log('alert_rule_reset', 'success', (int)$currentUser['id'], null, ['rule_id' => (int)($_POST['rule_id'] ?? 0)]);
+        flash('success', '変動通知ルールを初期値へ戻しました。');
+        redirectTo('alerts/rules');
+    }
+
+    if ($route === 'alerts/task') {
+        postOnly();
+        if (!$activeProperty) {
+            throw new RuntimeException('先に分析対象プロパティを選んでください。');
+        }
+        $taskId = $alertRepository->createImprovementTask(
+            (int)($_POST['alert_id'] ?? 0),
+            (int)$activeProperty['id'],
+            (int)$currentUser['id']
+        );
+        $audit->log('alert_task_created', 'success', (int)$currentUser['id'], null, ['task_id' => $taskId]);
+        flash('success', '変動通知から改善タスクを作成しました。');
+        redirectTo('improvements');
+    }
+
+    if ($route === 'alerts') {
+        $filters = [
+            'unread' => !empty($_GET['unread']),
+            'include_hidden' => !empty($_GET['include_hidden']),
+            'severity' => trim((string)($_GET['severity'] ?? '')),
+        ];
+        $rows = $activeProperty
+            ? $alertRepository->listForUser((int)$activeProperty['id'], (int)$currentUser['id'], $filters)
+            : [];
+        View::render('alerts', $common + ['title' => '変動通知', 'alerts' => $rows, 'filters' => $filters]);
+        exit;
+    }
+
+    if ($route === 'alerts/detail') {
+        if (!$activeProperty) {
+            throw new RuntimeException('先に分析対象プロパティを選んでください。');
+        }
+        $alert = $alertRepository->detail((int)($_GET['id'] ?? 0), (int)$activeProperty['id'], (int)$currentUser['id']);
+        if (!$alert) {
+            throw new RuntimeException('変動通知が見つかりません。');
+        }
+        $alertRepository->setUserState((int)$alert['id'], (int)$currentUser['id'], 'read', (int)$activeProperty['id']);
+        View::render('alert-detail', $common + ['title' => '変動通知詳細', 'alert' => $alert]);
+        exit;
+    }
+
+    if ($route === 'alerts/rules') {
+        View::render('alert-rules', $common + ['title' => '変動通知ルール', 'rules' => $alertRepository->allRules()]);
+        exit;
+    }
+
+    if ($route === 'alerts/runs') {
+        $runs = $activeProperty ? $alertRepository->recentRuns((int)$activeProperty['id']) : [];
+        View::render('alert-runs', $common + ['title' => '変動検知履歴', 'runs' => $runs]);
+        exit;
+    }
+
     if ($route === 'improvements/create') {
         postOnly();
         if (!$activeProperty) {
@@ -785,6 +897,8 @@ try {
             'title' => 'アカウント',
             'account' => $userRepo->find((int)$currentUser['id']),
             'mailEnabled' => $mailer->enabled(),
+            'notificationPreference' => $alertRepository->preference((int)$currentUser['id']),
+            'alertRuleKeys' => \Tenyendama\SeoWatch\AlertRuleEvaluator::RULE_KEYS,
         ]);
         exit;
     }
@@ -931,6 +1045,8 @@ try {
         $phpCliPath = PHP_BINARY ?: 'php';
         $appPath = realpath(__DIR__);
         $cronImportCommand = sprintf('%s %s/bin/import.php --days=3', $phpCliPath, $appPath);
+        $cronAlertCommand = sprintf('%s %s/bin/detect-alerts.php', $phpCliPath, $appPath);
+        $cronDigestCommand = sprintf('%s %s/bin/send-alert-digest.php', $phpCliPath, $appPath);
         $cronWrapperCommand = sprintf('PHP_BIN=%s %s/bin/cron.sh', $phpCliPath, $appPath);
 
         View::render('settings', $common + [
@@ -944,6 +1060,8 @@ try {
             'cliPhpPath' => $phpCliPath,
             'appRootPath' => $appPath,
             'cronImportCommand' => $cronImportCommand,
+            'cronAlertCommand' => $cronAlertCommand,
+            'cronDigestCommand' => $cronDigestCommand,
             'cronWrapperCommand' => $cronWrapperCommand,
             'lastRun' => $lastRun,
             'mailEnabled' => $mailer->enabled(),

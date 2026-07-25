@@ -52,4 +52,19 @@ use Tenyendama\SeoWatch\View;
         <button class="button primary" type="submit">変更する</button>
     </form>
 </section>
+<section class="card">
+    <h2>変動通知設定</h2>
+    <?php if (!$mailEnabled): ?><div class="alert warning">メール配送が停止中です。アプリ内通知は利用できます。</div><?php endif; ?>
+    <?php if (empty($account['email_verified_at'])): ?><div class="alert warning">メール通知には確認済みメールアドレスが必要です。</div><?php endif; ?>
+    <form method="post" action="index.php?r=alerts/preferences" class="stack-form">
+      <input type="hidden" name="_csrf" value="<?=View::e(Csrf::token())?>">
+      <label><input type="checkbox" name="in_app_enabled" value="1" <?=!empty($notificationPreference['in_app_enabled'])?'checked':''?>> アプリ内通知</label>
+      <label><input type="checkbox" name="email_enabled" value="1" <?=!empty($notificationPreference['email_enabled'])?'checked':''?> <?=(!$mailEnabled||empty($account['email_verified_at']))?'disabled':''?>> メール通知</label>
+      <label>配送方式<select name="delivery_mode"><option value="none">送信しない</option><option value="immediate" <?=$notificationPreference['delivery_mode']==='immediate'?'selected':''?>>即時</option><option value="daily_digest" <?=$notificationPreference['delivery_mode']==='daily_digest'?'selected':''?>>日次ダイジェスト</option></select></label>
+      <label>最低重要度<select name="minimum_severity"><?php foreach(['info','warning','critical'] as $v):?><option value="<?=$v?>" <?=$notificationPreference['minimum_severity']===$v?'selected':''?>><?=$v?></option><?php endforeach?></select></label>
+      <label>ダイジェスト時刻<input type="time" name="digest_time" value="<?=View::e(substr((string)$notificationPreference['digest_time'],0,5))?>"></label>
+      <fieldset><legend>対象ルール</legend><?php $selected=json_decode((string)($notificationPreference['enabled_rule_types']??''),true); foreach($alertRuleKeys as $key):?><label><input type="checkbox" name="enabled_rule_types[]" value="<?=View::e($key)?>" <?=!is_array($selected)||in_array($key,$selected,true)?'checked':''?>> <?=View::e($key)?></label><?php endforeach?></fieldset>
+      <button class="button primary" type="submit">通知設定を保存</button>
+    </form>
+</section>
 </div>
