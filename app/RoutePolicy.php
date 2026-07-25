@@ -31,6 +31,12 @@ final class RoutePolicy
         'maintenance/normalize',
         'improvements/create',
         'improvements/update',
+        'alerts/detect',
+        'alerts/rules',
+        'alerts/rules/save',
+        'alerts/rules/reset',
+        'alerts/runs',
+        'alerts/task',
     ];
 
     public static function requiresSuperuser(string $route): bool
