@@ -68,7 +68,7 @@ config/local.php
 
 - DBスキーマ変更はありません。
 - `bin/*.php`のshebangを`#!/usr/bin/env php`へ戻しました。
-- heteml固有のCronパスは`bin/cron.sh.example`と`docs/HETEML.md`へ分離しました。
+- heteml固有のCronパスは`docs/HETEML.md`へ分離しました。
 - インストーラーとドキュメントを汎用ホスティング向けに整理しました。
 - `config/local.php`、OAuthトークン、取得済みデータは変更されません。
 ## v0.10.2からv0.11.0

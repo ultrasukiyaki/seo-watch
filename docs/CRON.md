@@ -26,32 +26,16 @@ php -v
 
 共有サーバーではWeb版PHPとCLI版PHPのパスが異なる場合があります。ホスティング事業者の管理画面または公式マニュアルを確認してください。
 
-## ラッパースクリプトを使う
+## PHP CLIのフルパス
 
-`bin/cron.sh.example` は、アプリの設置パスを自動判定します。
+Cronではラッパーシェルを使わず、各PHP CLIを直接実行します。Web版PHPとCLI版PHPのバージョンが異なる場合があるため、サーバーで確認したPHP CLIのフルパスを指定してください。
 
 ```bash
-cp bin/cron.sh.example bin/cron.sh
-chmod 700 bin/cron.sh
+test -x /use/local/bin/php8.3
+/use/local/bin/php8.3 -v
 ```
 
-PATH上の `php` を利用できる場合:
-
-```cron
-15 4 * * * /home/example/public_html/seo-watch/bin/cron.sh
-```
-
-PHPのフルパスが必要な場合:
-
-```cron
-15 4 * * * PHP_BIN=/usr/local/bin/php8.3 /home/example/public_html/seo-watch/bin/cron.sh
-```
-
-取得日数も環境変数で変更できます。
-
-```cron
-15 4 * * * PHP_BIN=/usr/local/bin/php8.3 IMPORT_DAYS=7 /home/example/public_html/seo-watch/bin/cron.sh
-```
+`/use/local/bin/php8.3`は設置先サーバーの実在するパスへ置き換えます。PHPのフルパスをCronコマンドの先頭に指定する場合、`bin/*.php`のshebang変更は不要です。
 
 ## ログを残す
 
@@ -85,7 +69,7 @@ php bin/send-alert-digest.php --dry-run
 
 ## v0.10系の同期排他と履歴
 
-Cronラッパーは `SEO_WATCH_IMPORT_SOURCE=cron` を設定し、同期履歴へ実行元を記録します。Webや別Cronが同じプロパティを取得中の場合、DB leaseにより多重実行は開始されません。
+Webや別Cronが同じプロパティを取得中の場合、DB leaseにより多重実行は開始されません。必要に応じてCronコマンドの先頭で`SEO_WATCH_IMPORT_SOURCE=cron`または`SEO_WATCH_ALERT_SOURCE=cron`を指定すると、実行元をCronとして履歴へ記録できます。
 
 正常終了・例外終了では所有者一致を確認してleaseを解除します。プロセス強制終了などで残ったleaseは有効期限後にstaleとなります。
 

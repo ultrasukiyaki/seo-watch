@@ -18,7 +18,7 @@ rsync -a --exclude='.git' --exclude='.github' --exclude='.agents' --exclude='.co
     --exclude='config/local.php' --exclude='logs' --exclude='cache' --exclude='*.log' --exclude='*.tmp' \
     --exclude='seo-watch-v*-release.zip' --exclude='seo-watch-v*-checksums.sha256' \
     --exclude='PR_BODY.md' --exclude='RELEASE_NOTES.md' \
-    --exclude='bin/cron.sh' --exclude='bin/.htaccess' \
+    --exclude='bin/.htaccess' \
     "$REPO_ROOT"/ "$tempdir/seo-watch"
 
 cd "$tempdir"

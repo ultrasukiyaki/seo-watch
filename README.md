@@ -114,7 +114,15 @@ php bin/maintenance.php --dry-run
 php bin/maintenance.php --execute --target=import-runs
 ```
 
-`bin/*.php` のshebangは汎用の `#!/usr/bin/env php` です。共有サーバー固有のPHPパスはソースへ直接書き込まず、Cronコマンドまたは `PHP_BIN` 環境変数で指定してください。
+`bin/*.php` のshebangは汎用の `#!/usr/bin/env php` です。CronではWeb版PHPとCLI版PHPのバージョンが異なる場合があるため、`php`だけで呼び出さず、サーバーで確認したCLI版PHPのフルパスをCronコマンドへ記述してください。
+
+```cron
+15 3 * * * /use/local/bin/php8.3 /path/to/seo-watch/bin/import.php --days=3
+30 3 * * * /use/local/bin/php8.3 /path/to/seo-watch/bin/detect-alerts.php
+*/15 * * * * /use/local/bin/php8.3 /path/to/seo-watch/bin/send-alert-digest.php
+```
+
+> **Cron実行時の注意:** `/use/local/bin/php8.3`は設置先サーバーの実在するPHP CLIパスに置き換えてください。先に`test -x /use/local/bin/php8.3`と`/use/local/bin/php8.3 -v`で存在・実行権限・バージョンを確認します。PHPをフルパスで明示して`/full/path/to/php /path/to/script.php`形式で起動する場合、`bin/*.php`のshebang変更は不要です。`./bin/script.php`として直接実行する場合に限り、shebangも実機のPHPフルパスへ変更してください。
 
 ## ディレクトリ構成
 

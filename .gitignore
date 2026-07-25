@@ -1,5 +1,3 @@
-# Ignore cron script if it should not be tracked
-bin/cron.sh
 config/local.php
 
 # Common environment and system files
