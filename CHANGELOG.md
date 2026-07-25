@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.12.1 - 2026-07-26
+
+- Cronラッパーを廃止し、`import.php`、`detect-alerts.php`、`send-alert-digest.php`をPHP CLIのフルパスから直接実行する方式へ統一
+- README、Cron、heteml向けドキュメントへPHP CLIパスの確認方法と、`sed`による`bin/*.php`のshebang一括変更方法を追加
+- `bin/package.sh`のZIPとSHA-256 checksum出力先をリポジトリ直下の`dist/`へ変更
+- `dist/`をGit管理と配布ZIPの対象外に設定
+- DBスキーマおよび既存データの変更はなし
+
 ## v0.12.0 - 2026-07-26
 
 ### Added
