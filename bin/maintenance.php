@@ -6,7 +6,7 @@ use Tenyendama\SeoWatch\MaintenanceService;
 
 $options = getopt('', ['dry-run', 'execute', 'target:', 'help']);
 if (isset($options['help'])) {
-    echo "Usage: php bin/maintenance.php [--dry-run|--execute] [--target=auth|tokens|rate-limits|auth-audit|import-runs|import-locks]\n";
+    echo "Usage: php bin/maintenance.php [--dry-run|--execute] [--target=auth|tokens|rate-limits|auth-audit|import-runs|import-locks|alert-runs|alert-deliveries|alert-occurrences|alert-locks]\n";
     echo "Default is --dry-run. Search Console data, page metadata, tasks, users, OAuth and settings are never deleted.\n";
     exit(0);
 }
