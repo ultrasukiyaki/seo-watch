@@ -1,6 +1,6 @@
 # 10yendama SEO Watch
 
-現在のバージョンはv0.12.0です。Search Consoleの掲載順位・クリック数・表示回数・CTRの重要な変化を、説明可能なルールで検知する「変動通知」を追加しました。通知センター、改善タスク連携、即時メール、日次ダイジェスト、CLI・Cronに対応します。
+現在のバージョンはv0.12.1です。CronからPHP CLIを直接実行する運用へ統一し、サーバー固有のPHPフルパス設定と配布成果物の`dist/`出力に対応しました。
 
 メール設定は[メール配送ガイド](docs/MAIL.md)と[SMTP設定](docs/SMTP.md)を参照してください。
 
@@ -114,7 +114,26 @@ php bin/maintenance.php --dry-run
 php bin/maintenance.php --execute --target=import-runs
 ```
 
-`bin/*.php` のshebangは汎用の `#!/usr/bin/env php` です。共有サーバー固有のPHPパスはソースへ直接書き込まず、Cronコマンドまたは `PHP_BIN` 環境変数で指定してください。
+`bin/*.php` のshebangは汎用の `#!/usr/bin/env php` です。CronではWeb版PHPとCLI版PHPのバージョンが異なる場合があるため、`php`だけで呼び出さず、サーバーで確認したCLI版PHPのフルパスをCronコマンドへ記述してください。
+
+```cron
+15 3 * * * /usr/local/bin/php8.3 /path/to/seo-watch/bin/import.php --days=3
+30 3 * * * /usr/local/bin/php8.3 /path/to/seo-watch/bin/detect-alerts.php
+*/15 * * * * /usr/local/bin/php8.3 /path/to/seo-watch/bin/send-alert-digest.php
+```
+
+> **Cron実行時の注意:** `/usr/local/bin/php8.3`は設置先サーバーの実在するPHP CLIパスに置き換えてください。先に`test -x /usr/local/bin/php8.3`と`/usr/local/bin/php8.3 -v`で存在・実行権限・バージョンを確認します。PHPをフルパスで明示して`/full/path/to/php /path/to/script.php`形式で起動する場合、`bin/*.php`のshebang変更は不要です。`./bin/script.php`として直接実行する場合に限り、次のコマンドでshebangを一括変更できます。
+
+```bash
+PHP_BIN=/usr/local/bin/php8.3
+test -x "$PHP_BIN" || { echo "PHP CLIを実行できません: $PHP_BIN" >&2; exit 1; }
+"$PHP_BIN" -v
+find ./bin -maxdepth 1 -type f -name '*.php' \
+  -exec sed -i "1s|^#!.*php[^[:space:]]*$|#!${PHP_BIN}|" {} +
+head -n 1 ./bin/*.php
+```
+
+配布パッケージは`bash bin/package.sh`で生成し、ZIPとSHA-256 checksumはリポジトリ直下の`dist/`へ出力されます。`dist/`は配布ZIPおよびGit管理の対象外です。
 
 ## ディレクトリ構成
 

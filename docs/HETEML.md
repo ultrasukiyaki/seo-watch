@@ -48,7 +48,9 @@ heteml固有パスへ直接書き換える必要はありません。Cronコマ�
 例:
 
 ```cron
-15 4 * * * PHP_BIN=/usr/local/bin/php8.3 /home/users/ACCOUNT/web/PUBLIC_FOLDER/seo-watch/bin/cron.sh
+15 3 * * * /usr/local/bin/php8.3 /home/users/ACCOUNT/web/PUBLIC_FOLDER/seo-watch/bin/import.php --days=3
+30 3 * * * /usr/local/bin/php8.3 /home/users/ACCOUNT/web/PUBLIC_FOLDER/seo-watch/bin/detect-alerts.php
+*/15 * * * * /usr/local/bin/php8.3 /home/users/ACCOUNT/web/PUBLIC_FOLDER/seo-watch/bin/send-alert-digest.php
 ```
 
 サーバー構成によってPHPパスは異なります。現在の値はhetemlの管理画面・公式マニュアルで確認してください。
@@ -62,7 +64,7 @@ hetemlの案内を優先しつつ、一般的には次を目安にします。
 通常ファイル: 604
 .htaccess: 604
 config/local.php: 600
-bin/cron.sh: 700
+bin/*.phpを直接実行する場合: 700
 ```
 
 ## OAuth
