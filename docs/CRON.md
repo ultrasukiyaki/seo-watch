@@ -31,11 +31,22 @@ php -v
 Cronではラッパーシェルを使わず、各PHP CLIを直接実行します。Web版PHPとCLI版PHPのバージョンが異なる場合があるため、サーバーで確認したPHP CLIのフルパスを指定してください。
 
 ```bash
-test -x /use/local/bin/php8.3
-/use/local/bin/php8.3 -v
+test -x /usr/local/bin/php8.3
+/usr/local/bin/php8.3 -v
 ```
 
-`/use/local/bin/php8.3`は設置先サーバーの実在するパスへ置き換えます。PHPのフルパスをCronコマンドの先頭に指定する場合、`bin/*.php`のshebang変更は不要です。
+`/usr/local/bin/php8.3`は設置先サーバーの実在するパスへ置き換えます。PHPのフルパスをCronコマンドの先頭に指定する場合、`bin/*.php`のshebang変更は不要です。
+
+`./bin/script.php`として直接実行する運用では、アプリのルートディレクトリで次を実行すると、全`bin/*.php`の1行目を実機のPHPフルパスへ変更できます。最後の`head`で全ファイルの変更結果を確認してください。
+
+```bash
+PHP_BIN=/usr/local/bin/php8.3
+test -x "$PHP_BIN" || { echo "PHP CLIを実行できません: $PHP_BIN" >&2; exit 1; }
+"$PHP_BIN" -v
+find ./bin -maxdepth 1 -type f -name '*.php' \
+  -exec sed -i "1s|^#!.*php[^[:space:]]*$|#!${PHP_BIN}|" {} +
+head -n 1 ./bin/*.php
+```
 
 ## ログを残す
 
