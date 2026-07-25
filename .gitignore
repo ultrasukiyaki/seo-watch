@@ -17,5 +17,6 @@ logs/
 cache/
 
 # Release artifacts
+dist/
 seo-watch-v*-release.zip
 seo-watch-v*-checksums.sha256

@@ -124,6 +124,8 @@ php bin/maintenance.php --execute --target=import-runs
 
 > **Cron実行時の注意:** `/use/local/bin/php8.3`は設置先サーバーの実在するPHP CLIパスに置き換えてください。先に`test -x /use/local/bin/php8.3`と`/use/local/bin/php8.3 -v`で存在・実行権限・バージョンを確認します。PHPをフルパスで明示して`/full/path/to/php /path/to/script.php`形式で起動する場合、`bin/*.php`のshebang変更は不要です。`./bin/script.php`として直接実行する場合に限り、shebangも実機のPHPフルパスへ変更してください。
 
+配布パッケージは`bash bin/package.sh`で生成し、ZIPとSHA-256 checksumはリポジトリ直下の`dist/`へ出力されます。`dist/`は配布ZIPおよびGit管理の対象外です。
+
 ## ディレクトリ構成
 
 ```text
